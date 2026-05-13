@@ -1,0 +1,6 @@
+Size 5 5; Number of obstacles 4; Obstacle positions (2,0),(2,1),(2,3),(2,4)
+0 0 0 0 0
+0 0 0 0 0
+1 1 0 1 1
+0 0 0 0 0
+0 0 0 0 0

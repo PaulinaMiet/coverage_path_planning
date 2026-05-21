@@ -23,12 +23,12 @@ pub struct AcoConfig {
 impl AcoConfig {
     pub fn default_for(grid: &Grid) -> Self {
         AcoConfig {
-            n_ants:          20,
-            n_iterations:    300,
-            solution_length: (grid.len() + grid[0].len()) * 2,
+            n_ants:          50,
+            n_iterations:    1500,
+            solution_length: free_cells(grid) * 2,
             alpha:           1.0,
-            beta:            2.0,
-            rho:             0.1,
+            beta:            3.0,
+            rho:             0.05,
             tau_init:        1.0,
             q0:              0.9,
         }

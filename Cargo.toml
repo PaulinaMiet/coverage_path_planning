@@ -4,3 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+rand = "0.8"
+
+
+[[bin]]
+name = "aco"
+path = "src/main_aco.rs"
+
+[[bin]]
+name = "ils"
+path = "src/local_only/main_ils.rs"
+

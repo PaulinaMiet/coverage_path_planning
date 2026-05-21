@@ -1,1 +1,7 @@
 /target
+
+# personal testing files — never pushed
+local_only/
+
+# generated output — each person creates their own locally
+results/

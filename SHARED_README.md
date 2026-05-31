@@ -1,6 +1,6 @@
-# shared.rs — What's in here and how to reuse it
+# shared.rs
 
-This file is the shared foundation for all algorithm implementations.  
+shared.rs is the shared foundation for all algorithm implementations.  
 Every algorithm file should import from here so we all score routes the same way.
 
 ---
@@ -9,10 +9,10 @@ Every algorithm file should import from here so we all score routes the same way
 
 ```rust
 pub type Grid = Vec<Vec<u8>>;   // the map — 0 = free cell, 1 = obstacle
-pub type Pos  = (usize, usize); // a position on the map as (row, col)
+pub type Position  = (usize, usize); // a position on the map as (row, col)
 ```
 
-**In plain English:** The grid is just a 2D array of 0s and 1s. A `Pos` is a coordinate like `(2, 3)` meaning row 2, column 3.
+The grid is just a 2D array of 0s and 1s. A `Position` is a coordinate like `(2, 3)` meaning row 2, column 3.
 
 ---
 
@@ -27,7 +27,7 @@ There are **8 possible moves**:
 - **Plain moves** (`Up`, `Down`, `Left`, `Right`) — move exactly **1 cell** in that direction. If the next cell is a wall, the robot stays put.
 - **Slide moves** (`UpS`, `DownS`, `LeftS`, `RightS`) — the robot **slides** in that direction until it hits a wall or obstacle, then stops. Like a hockey puck.
 
-A **solution** is just a list (sequence) of these moves, e.g. `[Right, DownS, Left, Up, ...]`.
+A **solution** is a list (sequence) of these moves, e.g. `[Right, DownS, Left, Up, ...]`.
 
 ```rust
 pub const ALL_MOVES: [Move; 8] = [...]; // array of all 8 moves — useful for random sampling
@@ -49,7 +49,7 @@ pub const ALL_MOVES: [Move; 8] = [...]; // array of all 8 moves — useful for r
 ## Decoder — turning a move list into a path
 
 ```rust
-pub fn decode(moves: &[Move], grid: &Grid, start: Pos) -> Vec<Pos>
+pub fn decode(moves: &[Move], grid: &Grid, start: Position) -> Vec<Position>
 ```
 
 This takes your solution (a list of moves) and simulates the robot walking through the grid.  
@@ -64,7 +64,7 @@ It returns the **list of positions visited**, in order.
 ## Fitness — how we score a solution
 
 ```rust
-pub fn evaluate(path: &[Pos], grid: &Grid) -> Fitness
+pub fn evaluate(path: &[Position], grid: &Grid) -> Fitness
 ```
 
 This is the **one function everyone must use** to score their solutions. It returns a `Fitness` struct:
@@ -114,7 +114,7 @@ So the algorithm is pushed hard to cover everything, and secondarily to avoid ba
 2. **Load the grid** (or accept it as a parameter):
    ```rust
    let grid = parse_grid("path/to/map.txt");
-   let start: Pos = (0, 0); // or wherever your robot starts
+   let start: Position = (0, 0); // or wherever your robot starts
    ```
 
 3. **Your algorithm produces a `Vec<Move>`** — a sequence of moves. How you find that sequence is up to you (ACO, ILS, GA, greedy, etc.).

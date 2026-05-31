@@ -1,9 +1,8 @@
-
-mod shared;
 mod aco;
+mod shared;
 
-use shared::*;
 use aco::{AcoConfig, AcoResult};
+use shared::*;
 use std::fs;
 use std::io::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -15,10 +14,14 @@ fn main() {
     let (rw, uw) = penalty_weights(&grid);
 
     println!("\n=== {} ===", INSTANCE);
-    println!("free cells: {}  |  weights — revisit: {:.0}  unvisited: {:.0}\n",
-        free_cells(&grid), rw, uw);
+    println!(
+        "free cells: {}  |  weights — revisit: {:.0}  unvisited: {:.0}\n",
+        free_cells(&grid),
+        rw,
+        uw
+    );
 
-    let cfg    = AcoConfig::default_for(&grid);
+    let cfg = AcoConfig::default_for(&grid);
     let result = aco::run(&grid, &cfg);
 
     // Print convergence (only lines where fitness improved)
@@ -40,8 +43,11 @@ fn main() {
     display_grid(&grid, &decode(&result.best_moves, &grid, (0, 0)));
 
     // Unique timestamp so each run gets its own file
-    let ts      = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-    let stem    = instance_stem(INSTANCE);
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let stem = instance_stem(INSTANCE);
     let run_tag = format!("{}_{}", stem, ts);
 
     save_csv(&result, &run_tag);
@@ -52,7 +58,9 @@ fn main() {
 
 // "instances/cpp_10x10_line.txt" → "cpp_10x10_line"
 fn instance_stem(path: &str) -> String {
-    path.split('/').last().unwrap_or("run")
+    path.split('/')
+        .last()
+        .unwrap_or("run")
         .trim_end_matches(".txt")
         .to_string()
 }
@@ -78,7 +86,8 @@ fn save_csv(result: &AcoResult, tag: &str) {
             log.revisits,
             log.unvisited,
             fmt_moves(&log.moves),
-        ).unwrap();
+        )
+        .unwrap();
     }
 
     println!("\nsaved → {}", path);
@@ -89,7 +98,7 @@ fn save_json(result: &AcoResult, grid: &Grid, tag: &str) {
     ensure_results_dir();
     let path = format!("results/{}_aco.json", tag);
 
-    let f         = &result.best_fitness;
+    let f = &result.best_fitness;
     let best_path = decode(&result.best_moves, grid, (0, 0));
 
     let path_json: String = best_path
@@ -108,7 +117,10 @@ fn save_json(result: &AcoResult, grid: &Grid, tag: &str) {
         \t\"best_moves\": \"{}\",\n\
         \t\"best_path\": [{}]\n\
         }}",
-        f.total, f.distance, f.revisits, f.unvisited,
+        f.total,
+        f.distance,
+        f.revisits,
+        f.unvisited,
         fmt_moves(&result.best_moves),
         path_json,
     );

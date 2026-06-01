@@ -22,7 +22,7 @@ fn main() {
     );
 
     let cfg = AcoConfig::default_for(&grid);
-    let result = aco::run(&grid, &cfg);
+    let result = aco::aco_run(&grid, &cfg);
 
     // Print convergence (only lines where fitness improved)
     let mut last = f64::MAX;
@@ -54,6 +54,7 @@ fn main() {
     save_json(&result, &grid, &run_tag);
 }
 
+// i think this could go to shared.rs
 // ── Output helpers (for loggin) ────────────────────────────────────────────
 
 // "instances/cpp_10x10_line.txt" → "cpp_10x10_line"

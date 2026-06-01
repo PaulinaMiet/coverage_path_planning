@@ -2,7 +2,7 @@ use crate::shared::*;
 use rand::Rng;
 use std::collections::HashSet;
 
-//  Config
+//  Config ─────────────────────────────────────────────────────
 
 pub struct AcoConfig {
     pub n_ants: usize,
@@ -64,7 +64,7 @@ fn init_pheromone(grid: &Grid, tau: f64) -> Pheromone {
 
 // New free cells reachable by move m from pos. +1 avoids zero weight
 fn coverage_gain(pos: Position, mv: Move, grid: &Grid, visited: &HashSet<Position>) -> f64 {
-    apply(pos, mv, grid)
+    apply_move(pos, mv, grid)
         .iter()
         .filter(|p| !visited.contains(p))
         .count() as f64
@@ -119,7 +119,7 @@ fn build_solution(
 
         let mv = ALL_MOVES[mv_idx];
         moves.push(mv);
-        let new_cells = apply(pos, mv, grid);
+        let new_cells = apply_move(pos, mv, grid);
         if let Some(&last) = new_cells.last() {
             pos = last;
         }
@@ -133,7 +133,7 @@ fn build_solution(
 
 //  Main ACO loop //
 
-pub fn run(grid: &Grid, cfg: &AcoConfig) -> AcoResult {
+pub fn aco_run(grid: &Grid, cfg: &AcoConfig) -> AcoResult {
     let mut rng = rand::thread_rng();
     let mut pheromone = init_pheromone(grid, cfg.tau_init);
     let mut best_moves: Vec<Move> = Vec::new();
@@ -171,7 +171,7 @@ pub fn run(grid: &Grid, cfg: &AcoConfig) -> AcoResult {
             for &mv in &mvs {
                 let mv_idx = ALL_MOVES.iter().position(|&m| m == mv).unwrap();
                 pheromone[pos.0][pos.1][mv_idx] += deposit;
-                let new_cells = apply(pos, mv, grid);
+                let new_cells = apply_move(pos, mv, grid);
                 if let Some(&last) = new_cells.last() {
                     pos = last;
                 }

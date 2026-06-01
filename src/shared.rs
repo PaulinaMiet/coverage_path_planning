@@ -7,6 +7,8 @@ use std::fs;
 
 // ── Core types ────────────────────────────────────────────────
 
+pub const START: Position = (0, 0);
+
 pub type Grid = Vec<Vec<u8>>; // 0 = free, 1 = obstacle
 pub type Position = (usize, usize); // (row, col)
 
@@ -113,39 +115,40 @@ pub fn display_grid(grid: &Grid, path: &[Position]) {
 // ── Decoder ───────────────────────────────────────────────────
 
 /// Translates a Move into coordinate changes for the row and column.
-fn dir_delta(mv: Move) -> (isize, isize) {
+pub fn dir_delta(mv: Move) -> (isize, isize, bool) {
     match mv {
-        Move::Up | Move::UpS => (-1, 0),
-        Move::Down | Move::DownS => (1, 0),
-        Move::Left | Move::LeftS => (0, -1),
-        Move::Right | Move::RightS => (0, 1),
+        Move::Up => (-1, 0, false),
+        Move::Down => (1, 0, false),
+        Move::Left => (0, -1, false),
+        Move::Right => (0, 1, false),
+        Move::UpS => (-1, 0, true),
+        Move::DownS => (1, 0, true),
+        Move::LeftS => (0, -1, true),
+        Move::RightS => (0, 1, true),
     }
 }
 
 /// Takes current position, attempts to execute a Move, and returns an array of covered cells.
 /// Uses [`is_free`] to prevent crashing.
-pub fn apply(pos: Position, mv: Move, grid: &Grid) -> Vec<Position> {
+pub fn apply_move(pos: Position, mv: Move, grid: &Grid) -> Vec<Position> {
     let (r, c) = (pos.0 as isize, pos.1 as isize);
-    let (dr, dc) = dir_delta(mv);
-    match mv {
-        Move::Up | Move::Down | Move::Left | Move::Right => {
-            if is_free(r + dr, c + dc, grid) {
-                vec![((r + dr) as usize, (c + dc) as usize)]
-            } else {
-                vec![]
-            }
+    let (dr, dc, star) = dir_delta(mv);
+
+    let mut cells = vec![];
+    let (mut cr, mut cc) = (r, c);
+
+    if star {
+        while is_free(cr + dr, cc + dc, grid) {
+            cr += dr;
+            cc += dc;
+            cells.push((cr as usize, cc as usize));
         }
-        _ => {
-            let mut cells = vec![];
-            let (mut cr, mut cc) = (r, c);
-            while is_free(cr + dr, cc + dc, grid) {
-                cr += dr;
-                cc += dc;
-                cells.push((cr as usize, cc as usize));
-            }
-            cells
+    } else {
+        if is_free(r + dr, c + dc, grid) {
+            cells.push(((r + dr) as usize, (c + dc) as usize));
         }
     }
+    cells
 }
 
 /// Generates path form a list of moves.
@@ -153,7 +156,7 @@ pub fn decode(moves: &[Move], grid: &Grid, start: Position) -> Vec<Position> {
     let mut path = vec![start];
     let mut pos = start;
     for &mv in moves {
-        let cells = apply(pos, mv, grid);
+        let cells = apply_move(pos, mv, grid);
         if let Some(&last) = cells.last() {
             pos = last;
         }
@@ -171,6 +174,7 @@ pub struct Fitness {
     pub unvisited: usize,
 }
 
+///Returns revisit and unvisited penalty value. \
 /// Penalties scale with grid area so the algorithm always prefers full coverage
 /// area=25  : revisit=50,   unvisited=125
 /// area=100 : revisit=200,  unvisited=500

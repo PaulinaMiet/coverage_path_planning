@@ -111,13 +111,13 @@ So the algorithm is pushed hard to cover everything, and secondarily to avoid ba
    use shared::*;
    ```
 
-2. **Load the grid** (or accept it as a parameter):
+2. **Load the grid and penalties** (or accept it as a parameter):
    ```rust
-   let grid = parse_grid("path/to/map.txt");
-   let start: Position = (0, 0); // or wherever your robot starts
+   let grid = parse_grid(INSTANCE);
+   let (revis_pen, unvis_pen) = penalty_weights(&grid);
    ```
 
-3. **Your algorithm produces a `Vec<Move>`** — a sequence of moves. How you find that sequence is up to you (ACO, ILS, GA, greedy, etc.).
+3. **Your algorithm produces a `Vec<Move>`** — a sequence of moves. How you find that sequence is up to you (ACO, ILS, GA, greedy, etc.). The starting position is (0,0).
 
 4. **Decode and evaluate** using shared functions:
    ```rust

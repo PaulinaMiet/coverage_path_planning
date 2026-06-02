@@ -1,13 +1,17 @@
-// shared.rs — types, grid, decoder, and fitness. can be Used by all algorithm files.
+// shared.rs — types, grid, decoder, and fitness. can be used by all algorithm files.
 
-use rand::Rng;
+//use rand::Rng;
 use std::collections::HashSet;
 use std::fmt;
 use std::fs;
+use std::io::Write;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // ── Core types ────────────────────────────────────────────────
 
 pub const START: Position = (0, 0);
+pub const INSTANCE: &str = "instances/cpp_10x10_line.txt";
+const ALG: &str = "";
 
 pub type Grid = Vec<Vec<u8>>; // 0 = free, 1 = obstacle
 pub type Position = (usize, usize); // (row, col)
@@ -55,6 +59,26 @@ impl fmt::Display for Move {
             }
         )
     }
+}
+
+//  Per-iteration log ─────────────────────────────────────────
+
+// Best solution of each iteration , used for CSV export
+pub struct IterationLog {
+    pub iteration: usize,
+    pub fitness: f64,
+    pub distance: f64,
+    pub revisits: usize,
+    pub unvisited: usize,
+    pub moves: Vec<Move>,
+}
+
+// ── Result ────────────────────────────────────────────────────
+
+pub struct Result {
+    pub best_moves: Vec<Move>,
+    pub best_fitness: Fitness,
+    pub history: Vec<IterationLog>, // one entry per iteration
 }
 
 /// Turns an array of moves into a single string.
@@ -152,9 +176,9 @@ pub fn apply_move(pos: Position, mv: Move, grid: &Grid) -> Vec<Position> {
 }
 
 /// Generates path form a list of moves.
-pub fn decode(moves: &[Move], grid: &Grid, start: Position) -> Vec<Position> {
-    let mut path = vec![start];
-    let mut pos = start;
+pub fn decode(moves: &[Move], grid: &Grid) -> Vec<Position> {
+    let mut path = vec![START];
+    let mut pos = START;
     for &mv in moves {
         let cells = apply_move(pos, mv, grid);
         if let Some(&last) = cells.last() {
@@ -212,7 +236,94 @@ pub fn evaluate(path: &[Position], grid: &Grid) -> Fitness {
     }
 }
 
-// // ── Utility (this is for ILS algorithm initialization that i tested with random, we proposed spanning tree..) ───────────────────────────────────────────────────
+// ── Utility ───────────────────────────────────────────────────
+
+/// Extracts the filename without extension from a path
+/// "instances/cpp_10x10_line.txt" → "cpp_10x10_line"
+pub fn instance_stem(path: &str) -> String {
+    path.split('/')
+        .last()
+        .unwrap_or("run")
+        .trim_end_matches(".txt")
+        .to_string()
+}
+
+/// Generates a unique tag based on the instance name and current time
+pub fn generate_run_tag(instance_path: &str) -> String {
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    format!("{}_{}", instance_stem(instance_path), ts)
+}
+
+/// Ensures the results directory exists
+pub fn ensure_results_dir() {
+    fs::create_dir_all("results").expect("could not create results/");
+}
+
+pub fn save_csv(result: &Result, tag: &str, alg: &str) {
+    ensure_results_dir();
+    let path = format!("results/{}_{}.csv", tag, alg);
+    let mut f = fs::File::create(&path).expect("could not create CSV file");
+
+    writeln!(f, "iteration,fitness,distance,revisits,unvisited,solution").unwrap();
+    for log in &result.history {
+        writeln!(
+            f,
+            "{},{:.2},{:.2},{},{},\"{}\"",
+            log.iteration,
+            log.fitness,
+            log.distance,
+            log.revisits,
+            log.unvisited,
+            fmt_moves(&log.moves),
+        )
+        .unwrap();
+    }
+    println!("\nsaved csv   → {}", path);
+}
+
+// Best solution path as (row,col) pairs , in json,  for future grid visualisation
+pub fn save_json(result: &Result, grid: &Grid, tag: &str, alg: &str, config_json: &str) {
+    ensure_results_dir();
+    let path = format!("results/{}_{}.json", tag, alg);
+
+    let f = &result.best_fitness;
+    let best_path = decode(&result.best_moves, grid);
+
+    let path_json: String = best_path
+        .iter()
+        .map(|(r, c)| format!("[{},{}]", r, c))
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let json = format!(
+        "{{\n\
+        \t\"algorithm\": \"{alg}\",\n\
+        \t\"instance\": \"{tag}\",\n\
+        \t\"config\": {{ {} }},\n\
+        \t\"best_fitness\": {:.2},\n\
+        \t\"distance\": {:.2},\n\
+        \t\"revisits\": {},\n\
+        \t\"unvisited\": {},\n\
+        \t\"best_moves\": \"{}\",\n\
+        \t\"best_path\": [{}]\n\
+        }}",
+        config_json,
+        f.total,
+        f.distance,
+        f.revisits,
+        f.unvisited,
+        fmt_moves(&result.best_moves),
+        path_json,
+    );
+
+    fs::write(&path, json).expect("could not write JSON file");
+    println!("saved → {}", path);
+}
+
+//(this is for ILS algorithm initialization that i tested with random, we proposed spanning tree..) ───────────────────────────────────────────────────
 
 // /// Random move sequence. Length scales with grid size.
 // pub fn random_solution(grid: &Grid, rng: &mut impl Rng) -> Vec<Move> {

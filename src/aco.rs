@@ -29,26 +29,12 @@ impl AcoConfig {
             q0: 0.9,
         }
     }
-}
-
-//  Per-iteration log ─────────────────────────────────────────
-
-// Best ant of each iteration , used for CSV export
-pub struct IterationLog {
-    pub iteration: usize,
-    pub fitness: f64,
-    pub distance: f64,
-    pub revisits: usize,
-    pub unvisited: usize,
-    pub moves: Vec<Move>,
-}
-
-// ── Result ────────────────────────────────────────────────────
-
-pub struct AcoResult {
-    pub best_moves: Vec<Move>,
-    pub best_fitness: Fitness,
-    pub history: Vec<IterationLog>, // one entry per iteration
+    pub fn to_json_map(&self) -> String {
+        format!(
+            "\"n_ants\": {}, \"n_iterations\": {}, \"alpha\": {}, \"beta\": {}, \"rho\": {}",
+            self.n_ants, self.n_iterations, self.alpha, self.beta, self.rho
+        )
+    }
 }
 
 // ── Pheromone ─────────────────────────────────────────────────
@@ -133,7 +119,7 @@ fn build_solution(
 
 //  Main ACO loop //
 
-pub fn aco_run(grid: &Grid, cfg: &AcoConfig) -> AcoResult {
+pub fn aco_run(grid: &Grid, cfg: &AcoConfig) -> Result {
     let mut rng = rand::thread_rng();
     let mut pheromone = init_pheromone(grid, cfg.tau_init);
     let mut best_moves: Vec<Move> = Vec::new();
@@ -146,7 +132,7 @@ pub fn aco_run(grid: &Grid, cfg: &AcoConfig) -> AcoResult {
 
         for _ in 0..cfg.n_ants {
             let moves = build_solution(grid, &pheromone, cfg, &mut rng);
-            let fitness = evaluate(&decode(&moves, grid, (0, 0)), grid);
+            let fitness = evaluate(&decode(&moves, grid), grid);
             if iter_best
                 .as_ref()
                 .map_or(true, |(_, b)| fitness.total < b.total)
@@ -194,8 +180,8 @@ pub fn aco_run(grid: &Grid, cfg: &AcoConfig) -> AcoResult {
         }
     }
 
-    let best_fitness = evaluate(&decode(&best_moves, grid, (0, 0)), grid);
-    AcoResult {
+    let best_fitness = evaluate(&decode(&best_moves, grid), grid);
+    Result {
         best_moves,
         best_fitness,
         history,

@@ -18,7 +18,7 @@ fn main() {
     );
 
     // 1. Run Algorithm
-    let cfg = IlsConfig::default_for(&grid);
+    let cfg = IlsConfig::default_for();
     let result = ils::ils_run(&grid, &cfg);
 
     // 2. Print Convergence (Progress)

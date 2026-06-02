@@ -11,7 +11,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const START: Position = (0, 0);
 pub const INSTANCE: &str = "instances/cpp_10x10_line.txt";
-const ALG: &str = "";
 
 pub type Grid = Vec<Vec<u8>>; // 0 = free, 1 = obstacle
 pub type Position = (usize, usize); // (row, col)

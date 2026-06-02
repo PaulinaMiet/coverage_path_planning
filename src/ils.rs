@@ -13,7 +13,7 @@ pub struct IlsConfig {
 }
 
 impl IlsConfig {
-    pub fn default_for(grid: &Grid) -> Self {
+    pub fn default_for() -> Self {
         IlsConfig {
             n_iterations: 100,
             ls_iterations: 150,
@@ -34,7 +34,6 @@ impl IlsConfig {
 pub struct Edge {
     pub u: Position,
     pub v: Position,
-    pub weight: u32,
 }
 
 /// Computes an MST of all free cells using Prim's algorithm.
@@ -57,13 +56,13 @@ pub fn compute_mst(grid: &Grid) -> Vec<Edge> {
     visited.insert(start);
     add_neighbors(start, grid, &visited, &mut pq);
 
-    while let Some(Reverse((weight, u, v))) = pq.pop() {
+    while let Some(Reverse((u, v))) = pq.pop() {
         if visited.contains(&v) {
             continue;
         }
 
         visited.insert(v);
-        mst.push(Edge { u, v, weight });
+        mst.push(Edge { u, v });
         add_neighbors(v, grid, &visited, &mut pq);
     }
 
@@ -85,7 +84,7 @@ fn add_neighbors(
     pos: Position,
     grid: &Grid,
     visited: &HashSet<Position>,
-    pq: &mut BinaryHeap<Reverse<(u32, Position, Position)>>,
+    pq: &mut BinaryHeap<Reverse<(Position, Position)>>,
 ) {
     let (r, c) = (pos.0 as isize, pos.1 as isize);
     let dirs = [(-1, 0), (1, 0), (0, -1), (0, 1)];
@@ -96,7 +95,7 @@ fn add_neighbors(
         if is_free(nr, nc, grid) {
             let npos = (nr as usize, nc as usize);
             if !visited.contains(&npos) {
-                pq.push(Reverse((1, pos, npos)))
+                pq.push(Reverse((pos, npos)))
             }
         }
     }
@@ -106,7 +105,7 @@ fn add_neighbors(
 
 pub fn ils_run(grid: &Grid, cfg: &IlsConfig) -> Result {
     let mst = compute_mst(grid);
-    let mut current_moves = mst_to_moves(grid, &mst);
+    let mut current_moves = mst_to_moves(&mst);
 
     let mut best_moves = current_moves.clone();
     let mut best_fitness = evaluate(&decode(&best_moves, grid), grid);
@@ -159,7 +158,7 @@ fn positions_to_moves(path: &[Position]) -> Vec<Move> {
     moves
 }
 
-pub fn mst_to_moves(grid: &Grid, mst: &[Edge]) -> Vec<Move> {
+pub fn mst_to_moves(mst: &[Edge]) -> Vec<Move> {
     let mut adj: HashMap<Position, Vec<(usize, usize)>> = HashMap::new(); // maps a point to a list of its neighbors
 
     for edge in mst {

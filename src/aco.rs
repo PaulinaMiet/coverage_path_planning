@@ -37,7 +37,7 @@ impl AcoConfig {
     }
 }
 
-// ── Pheromone ─────────────────────────────────────────────────
+// Pheromone 
 
 // τ[row][col][move_idx]  how good is move m when standing at cell (r,c)?
 type Pheromone = Vec<Vec<[f64; 8]>>;
@@ -46,7 +46,7 @@ fn init_pheromone(grid: &Grid, tau: f64) -> Pheromone {
     vec![vec![[tau; 8]; grid[0].len()]; grid.len()]
 }
 
-// ── Heuristic ─────────────────────────────────────────────────
+// Heuristic 
 
 // New free cells reachable by move m from pos. +1 avoids zero weight
 fn coverage_gain(pos: Position, mv: Move, grid: &Grid, visited: &HashSet<Position>) -> f64 {
@@ -57,7 +57,7 @@ fn coverage_gain(pos: Position, mv: Move, grid: &Grid, visited: &HashSet<Positio
         + 1.0
 }
 
-// ── Ant construction ──────────────────────────────────────────
+// Ant construction 
 
 fn build_solution(
     grid: &Grid,

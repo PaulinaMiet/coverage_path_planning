@@ -46,7 +46,21 @@ fn init_pheromone(grid: &Grid, tau: f64) -> Pheromone {
     vec![vec![[tau; 8]; grid[0].len()]; grid.len()]
 }
 
-// Heuristic 
+// Heuristic
+
+// Returns how attractive a move is based on new cells it covers.
+// If the move hits a wall and goes nowhere (no-op), return near-zero so ants strongly avoid it.
+// Otherwise: count of newly covered cells + 1.0 (the +1 keeps zero-gain moves alive but weak).
+// fn coverage_gain(pos: Position, mv: Move, grid: &Grid, visited: &HashSet<Position>) -> f64 {
+//     let cells = apply_move(pos, mv, grid);
+//     if cells.is_empty() {
+//         return 0.01; // no-op: robot doesn't move at all — strongly discourage this
+//     }
+//     cells.iter()
+//         .filter(|p| !visited.contains(p))
+//         .count() as f64
+//         + 1.0
+// }
 
 // New free cells reachable by move m from pos. +1 avoids zero weight
 fn coverage_gain(pos: Position, mv: Move, grid: &Grid, visited: &HashSet<Position>) -> f64 {
@@ -57,7 +71,7 @@ fn coverage_gain(pos: Position, mv: Move, grid: &Grid, visited: &HashSet<Positio
         + 1.0
 }
 
-// Ant construction 
+// Ant construction
 
 fn build_solution(
     grid: &Grid,

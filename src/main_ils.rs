@@ -38,6 +38,7 @@ fn main() {
     println!("  distance   : {:.2}", f.distance);
     println!("  revisits   : {}", f.revisits);
     println!("  unvisited  : {}", f.unvisited);
+    println!("  solution   : [{}]", fmt_moves(&result.best_moves));
     println!("\n--- Visualisation ---");
     display_grid(&grid, &decode(&result.best_moves, &grid));
 

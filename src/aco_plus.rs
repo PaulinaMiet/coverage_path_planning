@@ -1,97 +1,10 @@
 // aco_plus.rs — ACO+ (Improved Ant Colony Optimisation)
-//
-// Movement: 8-direction single-step (4 cardinal + 4 diagonal)
-// Anti-oscillation: short-term tabu window (default size 6) + safety valve
-// Pheromone: τ[row][col][move_idx], 8 slots per cell (one per direction)
-// Key differentiator vs basic ACO: LOCAL pheromone decay applied after each
-// ant step, within the same iteration. This weakens the trail an ant just
-// walked, steering subsequent ants in the same round toward unexplored cells.
-//   τ[r][c][mv] ← τ[r][c][mv] × (1 − local_rho)
+// 20260607
 
 use crate::shared::*;
 use rand::Rng;
 use std::collections::{HashSet, VecDeque};
 
-// ── ACO+ private types and helpers ───────────────────────────
-// These are only needed by aco_plus.rs and live here rather than
-// in shared.rs to avoid dead-code warnings for aco and ils.
-
-type Pos = Position;
-type NeighbourMap = Vec<Vec<Vec<(usize, Position)>>>;
-
-// Single-step move — identical to apply_move, named `apply` for readability
-fn apply(pos: Position, mv: Move, grid: &Grid) -> Vec<Position> {
-    apply_move(pos, mv, grid)
-}
-
-// BFS connectivity check from `start`.
-// Returns Ok(n)  if all n free cells are reachable.
-// Returns Err(k) if k free cells are unreachable.
-fn flood_fill_check(
-    grid: &Grid,
-    start: Position,
-) -> std::result::Result<usize, usize> {
-    let total = free_cells(grid);
-    let mut visited: HashSet<Position> = HashSet::new();
-    let mut queue: VecDeque<Position> = VecDeque::new();
-
-    visited.insert(start);
-    queue.push_back(start);
-
-    let deltas: [(isize, isize); 8] = [
-        (-1,  0), ( 1,  0), ( 0, -1), ( 0,  1),
-        (-1, -1), (-1,  1), ( 1, -1), ( 1,  1),
-    ];
-
-    while let Some(pos) = queue.pop_front() {
-        for (dr, dc) in deltas {
-            let nr = pos.0 as isize + dr;
-            let nc = pos.1 as isize + dc;
-            if is_free(nr, nc, grid) {
-                let npos = (nr as usize, nc as usize);
-                if visited.insert(npos) {
-                    queue.push_back(npos);
-                }
-            }
-        }
-    }
-
-    let reachable = visited.len();
-    if reachable == total { Ok(reachable) } else { Err(total - reachable) }
-}
-
-// Pre-computes all legal single-step neighbours for every free cell.
-// map[r][c] = Vec of (move_index, destination).
-// move_index matches ALL_MOVES and the pheromone [f64; 8] slots.
-pub fn build_neighbour_map(grid: &Grid) -> NeighbourMap {
-    let rows = grid.len();
-    let cols = grid[0].len();
-    let mut map: NeighbourMap = vec![vec![Vec::new(); cols]; rows];
-
-    // Deltas in ALL_MOVES index order:
-    // 0=Up  1=Down  2=Left  3=Right  4=UpLeft  5=UpRight  6=DownLeft  7=DownRight
-    let deltas: [(isize, isize); 8] = [
-        (-1,  0), ( 1,  0), ( 0, -1), ( 0,  1),
-        (-1, -1), (-1,  1), ( 1, -1), ( 1,  1),
-    ];
-
-    for r in 0..rows {
-        for c in 0..cols {
-            if grid[r][c] == 1 { continue; }
-            for (mv_idx, &(dr, dc)) in deltas.iter().enumerate() {
-                let nr = r as isize + dr;
-                let nc = c as isize + dc;
-                if is_free(nr, nc, grid) {
-                    map[r][c].push((mv_idx, (nr as usize, nc as usize)));
-                }
-            }
-        }
-    }
-
-    map
-}
-
-// ── Config ────────────────────────────────────────────────────
 
 pub struct AcoConfig {
     pub n_ants:          usize,
@@ -135,24 +48,85 @@ impl AcoConfig {
 
 // ── Pheromone ─────────────────────────────────────────────────
 
-// τ[row][col][move_idx] — 8 directions, index matches ALL_MOVES:
-// 0=Up  1=Down  2=Left  3=Right  4=UpLeft  5=UpRight  6=DownLeft  7=DownRight
+// τ[row][col][move_idx] — 8 directions matching ALL_MOVES index contract
 type Pheromone = Vec<Vec<[f64; 8]>>;
 
 fn init_pheromone(grid: &Grid, tau: f64) -> Pheromone {
     vec![vec![[tau; 8]; grid[0].len()]; grid.len()]
 }
 
-// ── Heuristic ─────────────────────────────────────────────────
+// ── Neighbour map ─────────────────────────────────────────────
 
-// Returns attractiveness of a move based on coverage gain.
-// Base: +1.0 if the destination is unvisited, +0.0 if already seen.
-// Diagonal bonus: for diagonal moves, also counts unvisited orthogonal
-// neighbours of the destination (×0.5 each) — rewards the positional
-// advantage that diagonals give over cardinal steps.
-// +1.0 floor ensures weight is always > 0 so blocked moves stay selectable.
-fn coverage_gain(pos: Pos, mv: Move, grid: &Grid, visited: &HashSet<Pos>) -> f64 {
-    let dest_cells = apply(pos, mv, grid);
+// Pre-built once per run. Each cell stores (move_idx, destination) for every
+// legal move. Illegal moves are structurally absent — no runtime wall checks.
+type NeighbourMap = Vec<Vec<Vec<(usize, Position)>>>;
+
+pub fn build_neighbour_map(grid: &Grid) -> NeighbourMap {
+    let rows = grid.len();
+    let cols = grid[0].len();
+    let mut map: NeighbourMap = vec![vec![Vec::new(); cols]; rows];
+
+    // Deltas in ALL_MOVES order:
+    // 0=Up 1=Down 2=Left 3=Right 4=UpLeft 5=UpRight 6=DownLeft 7=DownRight
+    let deltas: [(isize, isize); 8] = [
+        (-1,  0), ( 1,  0), ( 0, -1), ( 0,  1),
+        (-1, -1), (-1,  1), ( 1, -1), ( 1,  1),
+    ];
+
+    for r in 0..rows {
+        for c in 0..cols {
+            if grid[r][c] == 1 { continue; }
+            for (mv_idx, &(dr, dc)) in deltas.iter().enumerate() {
+                let nr = r as isize + dr;
+                let nc = c as isize + dc;
+                if is_free(nr, nc, grid) {
+                    map[r][c].push((mv_idx, (nr as usize, nc as usize)));
+                }
+            }
+        }
+    }
+
+    map
+}
+
+// ── Connectivity check ────────────────────────────────────────
+
+fn flood_fill_check(
+    grid: &Grid,
+    start: Position,
+) -> std::result::Result<usize, usize> {
+    let total = free_cells(grid);
+    let mut visited: HashSet<Position> = HashSet::new();
+    let mut queue: VecDeque<Position> = VecDeque::new();
+    visited.insert(start);
+    queue.push_back(start);
+
+    let deltas: [(isize, isize); 8] = [
+        (-1,  0), ( 1,  0), ( 0, -1), ( 0,  1),
+        (-1, -1), (-1,  1), ( 1, -1), ( 1,  1),
+    ];
+
+    while let Some(pos) = queue.pop_front() {
+        for (dr, dc) in deltas {
+            let nr = pos.0 as isize + dr;
+            let nc = pos.1 as isize + dc;
+            if is_free(nr, nc, grid) {
+                let npos = (nr as usize, nc as usize);
+                if visited.insert(npos) { queue.push_back(npos); }
+            }
+        }
+    }
+
+    let reachable = visited.len();
+    if reachable == total { Ok(reachable) } else { Err(total - reachable) }
+}
+
+
+// New unvisited cells reachable by this move. +1 keeps weight > 0.
+// Diagonal moves receive a bonus for each unvisited orthogonal neighbour
+// of the destination, rewarding moves that open up new area.
+fn coverage_gain(pos: Position, mv: Move, grid: &Grid, visited: &HashSet<Position>) -> f64 {
+    let dest_cells = apply_move(pos, mv, grid);
     if dest_cells.is_empty() { return 1.0; }
 
     let dest = dest_cells[0];
@@ -188,11 +162,11 @@ fn build_solution(
 ) -> Vec<Move> {
     let mut moves   = Vec::with_capacity(cfg.solution_length);
     let mut pos     = START;
-    let mut visited: HashSet<Pos> = HashSet::new();
+    let mut visited: HashSet<Position> = HashSet::new();
     visited.insert(pos);
 
     // Short-term tabu window — blocks the last tabu_size destinations
-    let mut tabu: VecDeque<Pos> = VecDeque::new();
+    let mut tabu: VecDeque<Position> = VecDeque::new();
 
     let total_free = free_cells(grid);
 
@@ -252,13 +226,12 @@ fn build_solution(
         let mv = ALL_MOVES[mv_idx];
         moves.push(mv);
 
-        // ── LOCAL pheromone decay (ACO+ distinguishing line) ──────────
         // Weaken the trail just used so subsequent ants in this iteration
         // are nudged away from the same path, increasing intra-round diversity.
         pheromone[r][c][mv_idx] *= 1.0 - cfg.local_rho;
 
         // Advance one cell and record coverage
-        let new_cells = apply(pos, mv, grid);
+        let new_cells = apply_move(pos, mv, grid);
         if let Some(&last) = new_cells.last() { pos = last; }
         for p in new_cells { visited.insert(p); }
 
@@ -272,10 +245,9 @@ fn build_solution(
     moves
 }
 
-// ── Main ACO+ loop ────────────────────────────────────────────
 
 pub fn run(grid: &Grid, cfg: &AcoConfig) -> Result {
-    // Connectivity check — warns if any free cell is unreachable from (0,0)
+    // Connectivity check — warn if any free cell is unreachable from (0,0)
     match flood_fill_check(grid, START) {
         Ok(n)  => println!("[ACO+] flood-fill OK — {} free cells all connected", n),
         Err(n) => println!("[ACO+] WARNING: {} free cells unreachable from start", n),
@@ -293,7 +265,6 @@ pub fn run(grid: &Grid, cfg: &AcoConfig) -> Result {
         let mut iter_best: Option<(Vec<Move>, Fitness)> = None;
 
         for _ in 0..cfg.n_ants {
-            // build_solution takes &mut pheromone for local decay
             let moves   = build_solution(grid, &mut pheromone, &neighbour_map, cfg, &mut rng);
             let fitness = evaluate(&decode(&moves, grid), grid);
             if iter_best.as_ref().map_or(true, |(_, b)| fitness.total < b.total) {
@@ -315,7 +286,7 @@ pub fn run(grid: &Grid, cfg: &AcoConfig) -> Result {
             for &mv in &mvs {
                 let mv_idx = ALL_MOVES.iter().position(|&m| m == mv).unwrap();
                 pheromone[pos.0][pos.1][mv_idx] += deposit;
-                let new_cells = apply(pos, mv, grid);
+                let new_cells = apply_move(pos, mv, grid);
                 if let Some(&last) = new_cells.last() { pos = last; }
             }
 

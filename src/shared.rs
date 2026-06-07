@@ -16,29 +16,31 @@ pub type Grid = Vec<Vec<u8>>; // 0 = free, 1 = obstacle
 pub type Position = (usize, usize); // (row, col)
 
 /// The move alphabet. Copy so we can pass by value freely.
-/// Plain (Up/Down/Left/Right): move 1 cell, stay put if blocked.
-/// Star (U*/D*/L*/R*): slide until the next cell is a wall or obstacle, then stop
+/// All 8 moves are single-step: 4 cardinal + 4 diagonal.
+/// If the destination cell is blocked or out of bounds the robot stays put.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Move {
     Up,
     Down,
     Left,
     Right,
-    UpS,
-    DownS,
-    LeftS,
-    RightS,
+    UpLeft,
+    UpRight,
+    DownLeft,
+    DownRight,
 }
 
+/// ALL_MOVES index contract (shared by pheromone arrays and NeighbourMap):
+///   0=Up  1=Down  2=Left  3=Right  4=UpLeft  5=UpRight  6=DownLeft  7=DownRight
 pub const ALL_MOVES: [Move; 8] = [
     Move::Up,
     Move::Down,
     Move::Left,
     Move::Right,
-    Move::UpS,
-    Move::DownS,
-    Move::LeftS,
-    Move::RightS,
+    Move::UpLeft,
+    Move::UpRight,
+    Move::DownLeft,
+    Move::DownRight,
 ];
 
 impl fmt::Display for Move {
@@ -47,14 +49,14 @@ impl fmt::Display for Move {
             f,
             "{}",
             match self {
-                Move::Up => "U",
-                Move::Down => "D",
-                Move::Left => "L",
-                Move::Right => "R",
-                Move::UpS => "U*",
-                Move::DownS => "D*",
-                Move::LeftS => "L*",
-                Move::RightS => "R*",
+                Move::Up        => "U",
+                Move::Down      => "D",
+                Move::Left      => "L",
+                Move::Right     => "R",
+                Move::UpLeft    => "UL",
+                Move::UpRight   => "UR",
+                Move::DownLeft  => "DL",
+                Move::DownRight => "DR",
             }
         )
     }
@@ -137,44 +139,35 @@ pub fn display_grid(grid: &Grid, path: &[Position]) {
 
 // ── Decoder ───────────────────────────────────────────────────
 
-/// Translates a Move into coordinate changes for the row and column.
-pub fn dir_delta(mv: Move) -> (isize, isize, bool) {
+/// Translates a Move into a (row_delta, col_delta) single step.
+/// All 8 moves are one cell; diagonal moves step ±1 on both axes.
+pub fn dir_delta(mv: Move) -> (isize, isize) {
     match mv {
-        Move::Up => (-1, 0, false),
-        Move::Down => (1, 0, false),
-        Move::Left => (0, -1, false),
-        Move::Right => (0, 1, false),
-        Move::UpS => (-1, 0, true),
-        Move::DownS => (1, 0, true),
-        Move::LeftS => (0, -1, true),
-        Move::RightS => (0, 1, true),
+        Move::Up        => (-1,  0),
+        Move::Down      => ( 1,  0),
+        Move::Left      => ( 0, -1),
+        Move::Right     => ( 0,  1),
+        Move::UpLeft    => (-1, -1),
+        Move::UpRight   => (-1,  1),
+        Move::DownLeft  => ( 1, -1),
+        Move::DownRight => ( 1,  1),
     }
 }
 
 /// Takes current position, attempts to execute a Move, and returns an array of covered cells.
-/// Uses [`is_free`] to prevent crashing.
+/// All moves are single-step. Returns a one-element Vec if the destination is free,
+/// or an empty Vec if it is blocked or out of bounds.
 pub fn apply_move(pos: Position, mv: Move, grid: &Grid) -> Vec<Position> {
     let (r, c) = (pos.0 as isize, pos.1 as isize);
-    let (dr, dc, star) = dir_delta(mv);
-
-    let mut cells = vec![];
-    let (mut cr, mut cc) = (r, c);
-
-    if star {
-        while is_free(cr + dr, cc + dc, grid) {
-            cr += dr;
-            cc += dc;
-            cells.push((cr as usize, cc as usize));
-        }
+    let (dr, dc) = dir_delta(mv);
+    if is_free(r + dr, c + dc, grid) {
+        vec![((r + dr) as usize, (c + dc) as usize)]
     } else {
-        if is_free(r + dr, c + dc, grid) {
-            cells.push(((r + dr) as usize, (c + dc) as usize));
-        }
+        vec![]
     }
-    cells
 }
 
-/// Generates path form a list of moves.
+/// Generates path from a list of moves, starting from START (0, 0).
 pub fn decode(moves: &[Move], grid: &Grid) -> Vec<Position> {
     let mut path = vec![START];
     let mut pos = START;

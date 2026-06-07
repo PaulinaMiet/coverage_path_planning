@@ -13,3 +13,7 @@ path = "src/main_aco.rs"
 [[bin]]
 name = "ils"
 path = "src/main_ils.rs"
+
+[[bin]]
+name = "aco_plus"
+path = "src/main_aco_plus.rs"

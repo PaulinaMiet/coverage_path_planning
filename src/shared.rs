@@ -10,7 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 // ── Core types ────────────────────────────────────────────────
 
 pub const START: Position = (0, 0);
-pub const INSTANCE: &str = "instances/cpp_10x10_line.txt";
+pub const INSTANCE: &str = "instances/cpp_10x10_chunk.txt";
 
 pub type Grid = Vec<Vec<u8>>; // 0 = free, 1 = obstacle
 pub type Position = (usize, usize); // (row, col)

@@ -49,13 +49,13 @@ impl fmt::Display for Move {
             f,
             "{}",
             match self {
-                Move::Up        => "U",
-                Move::Down      => "D",
-                Move::Left      => "L",
-                Move::Right     => "R",
-                Move::UpLeft    => "UL",
-                Move::UpRight   => "UR",
-                Move::DownLeft  => "DL",
+                Move::Up => "U",
+                Move::Down => "D",
+                Move::Left => "L",
+                Move::Right => "R",
+                Move::UpLeft => "UL",
+                Move::UpRight => "UR",
+                Move::DownLeft => "DL",
                 Move::DownRight => "DR",
             }
         )
@@ -143,14 +143,14 @@ pub fn display_grid(grid: &Grid, path: &[Position]) {
 /// All 8 moves are one cell; diagonal moves step ±1 on both axes.
 pub fn dir_delta(mv: Move) -> (isize, isize) {
     match mv {
-        Move::Up        => (-1,  0),
-        Move::Down      => ( 1,  0),
-        Move::Left      => ( 0, -1),
-        Move::Right     => ( 0,  1),
-        Move::UpLeft    => (-1, -1),
-        Move::UpRight   => (-1,  1),
-        Move::DownLeft  => ( 1, -1),
-        Move::DownRight => ( 1,  1),
+        Move::Up => (-1, 0),
+        Move::Down => (1, 0),
+        Move::Left => (0, -1),
+        Move::Right => (0, 1),
+        Move::UpLeft => (-1, -1),
+        Move::UpRight => (-1, 1),
+        Move::DownLeft => (1, -1),
+        Move::DownRight => (1, 1),
     }
 }
 
@@ -314,11 +314,3 @@ pub fn save_json(result: &Result, grid: &Grid, tag: &str, alg: &str, config_json
     fs::write(&path, json).expect("could not write JSON file");
     println!("saved → {}", path);
 }
-
-//(this is for ILS algorithm initialization that i tested with random, we proposed spanning tree..) ───────────────────────────────────────────────────
-
-// /// Random move sequence. Length scales with grid size.
-// pub fn random_solution(grid: &Grid, rng: &mut impl Rng) -> Vec<Move> {
-//     let len = (grid.len() + grid[0].len()) * 2;
-//     (0..len).map(|_| ALL_MOVES[rng.gen_range(0..8)]).collect()
-// }

@@ -6,10 +6,18 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 
 // Config ─────────────────────────────────────────────────────
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum StartingStrategy {
+    Mst,
+    Snake,
+    Random,
+}
+
 pub struct IlsConfig {
-    pub n_iterations: usize,  // Total ILS cycles
-    pub ls_iterations: usize, // Local search attempts per cycle
-    pub perturb_size: usize,  // How many moves to change during perturbation
+    pub n_iterations: usize,        // Total ILS cycles
+    pub ls_iterations: usize,       // Local search attempts per cycle
+    pub perturb_size: usize,        // How many moves to change during perturbation
+    pub strategy: StartingStrategy, //Starting path
 }
 
 impl IlsConfig {
@@ -18,12 +26,13 @@ impl IlsConfig {
             n_iterations: 100,
             ls_iterations: 150,
             perturb_size: 3,
+            strategy: StartingStrategy::Mst,
         }
     }
     pub fn to_json_map(&self) -> String {
         format!(
-            "\"n_iterations\": {}, \"ls_iterations\": {}, \"perturb_size\": {}",
-            self.n_iterations, self.ls_iterations, self.perturb_size
+            "\"n_iterations\": {}, \"ls_iterations\": {}, \"perturb_size\": {}, \"strategy\": \"{:?}\"",
+            self.n_iterations, self.ls_iterations, self.perturb_size, self.strategy
         )
     }
 }
@@ -101,11 +110,49 @@ fn add_neighbors(
     }
 }
 
+pub fn compute_snake_moves(grid: &Grid) -> Vec<Move> {
+    let rows = grid.len();
+    let cols = grid[0].len();
+    let mut moves = Vec::new();
+
+    for c in 0..cols {
+        if c % 2 == 0 {
+            // Even column: go down
+            for _ in 0..rows - 1 {
+                moves.push(Move::Down);
+            }
+        } else {
+            // Odd column: go up
+            for _ in 0..rows - 1 {
+                moves.push(Move::Up);
+            }
+        }
+
+        // Move right if not at the last column
+        if c < cols - 1 {
+            moves.push(Move::Right);
+        }
+    }
+    moves
+}
+
+/// Random move sequence. Length scales with grid size.
+pub fn compute_random_solution(grid: &Grid, rng: &mut impl Rng) -> Vec<Move> {
+    let len = (grid.len() + grid[0].len()) * 2;
+    (0..len).map(|_| ALL_MOVES[rng.gen_range(0..8)]).collect()
+}
+
 // ── Main ILS loop ──────────────────────────────────────────────
 
-pub fn ils_run(grid: &Grid, cfg: &IlsConfig) -> Result {
-    let mst = compute_mst(grid);
-    let mut current_moves = mst_to_moves(&mst);
+pub fn ils_run(grid: &Grid, cfg: &IlsConfig, rng: &mut impl Rng) -> Result {
+    let mut current_moves = match cfg.strategy {
+        StartingStrategy::Mst => {
+            let mst = compute_mst(grid);
+            mst_to_moves(&mst)
+        }
+        StartingStrategy::Snake => compute_snake_moves(grid),
+        StartingStrategy::Random => compute_random_solution(grid, rng),
+    };
 
     let mut best_moves = current_moves.clone();
     let mut best_fitness = evaluate(&decode(&best_moves, grid), grid);

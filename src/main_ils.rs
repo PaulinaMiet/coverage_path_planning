@@ -5,6 +5,7 @@ use ils::IlsConfig;
 use shared::*;
 
 fn main() {
+    let mut rng = rand::thread_rng();
     let grid = parse_grid(INSTANCE);
     let (rw, uw) = penalty_weights(&grid);
     let alg = "ils";
@@ -18,8 +19,9 @@ fn main() {
     );
 
     // 1. Run Algorithm
-    let cfg = IlsConfig::default_for();
-    let result = ils::ils_run(&grid, &cfg);
+    let mut cfg = IlsConfig::default_for();
+    cfg.strategy = ils::StartingStrategy::Random;
+    let result = ils::ils_run(&grid, &cfg, &mut rng);
 
     // 2. Print Convergence (Progress)
     println!("--- Convergence ---");

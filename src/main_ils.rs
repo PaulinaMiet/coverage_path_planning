@@ -20,7 +20,7 @@ fn main() {
 
     // 1. Run Algorithm
     let mut cfg = IlsConfig::default_for();
-    cfg.strategy = ils::StartingStrategy::Random;
+    //cfg.strategy = ils::StartingStrategy::Random;
     let result = ils::ils_run(&grid, &cfg, &mut rng);
 
     // 2. Print Convergence (Progress)

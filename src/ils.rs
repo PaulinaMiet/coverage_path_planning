@@ -136,10 +136,12 @@ pub fn compute_snake_moves(grid: &Grid) -> Vec<Move> {
     moves
 }
 
-/// Random move sequence. Length scales with grid size.
+/// Random move sequence. Length scales with grid area to allow full coverage.
 pub fn compute_random_solution(grid: &Grid, rng: &mut impl Rng) -> Vec<Move> {
-    let len = (grid.len() + grid[0].len()) * 2;
-    (0..len).map(|_| ALL_MOVES[rng.gen_range(0..8)]).collect()
+    let len = grid.len() * grid[0].len() * 2;
+    (0..len)
+        .map(|_| ALL_MOVES[rng.gen_range(0..ALL_MOVES.len())])
+        .collect()
 }
 
 // ── Main ILS loop ──────────────────────────────────────────────
@@ -159,7 +161,7 @@ pub fn ils_run(grid: &Grid, cfg: &IlsConfig, rng: &mut impl Rng) -> Result {
     let mut history = Vec::new();
 
     for i in 0..cfg.n_iterations {
-        local_search(&mut current_moves, grid, cfg.ls_iterations);
+        local_search(&mut current_moves, grid, cfg.ls_iterations, rng);
 
         let fitness = evaluate(&decode(&current_moves, grid), grid);
 
@@ -176,7 +178,7 @@ pub fn ils_run(grid: &Grid, cfg: &IlsConfig, rng: &mut impl Rng) -> Result {
             unvisited: best_fitness.unvisited,
             moves: best_moves.clone(),
         });
-        perturb(&mut current_moves, cfg.perturb_size);
+        perturb(&mut current_moves, cfg.perturb_size, rng);
     }
 
     Result {
@@ -242,8 +244,10 @@ pub fn mst_to_moves(mst: &[Edge]) -> Vec<Move> {
     positions_to_moves(&path)
 }
 
-fn local_search(moves: &mut Vec<Move>, grid: &Grid, imp: usize) {
-    let mut rng = rand::thread_rng();
+fn local_search(moves: &mut Vec<Move>, grid: &Grid, imp: usize, rng: &mut impl Rng) {
+    if moves.is_empty() {
+        return;
+    }
     let mut current_fitness = evaluate(&decode(moves, grid), grid).total;
 
     // try n random improvements
@@ -263,11 +267,14 @@ fn local_search(moves: &mut Vec<Move>, grid: &Grid, imp: usize) {
     }
 }
 
-fn perturb(moves: &mut Vec<Move>, perturb_size: usize) {
-    let mut rng = rand::thread_rng();
-    let start_idx = rng.gen_range(0..moves.len().saturating_sub(perturb_size));
+fn perturb(moves: &mut Vec<Move>, perturb_size: usize, rng: &mut impl Rng) {
+    if moves.is_empty() || perturb_size == 0 {
+        return;
+    }
+    let effective_size = perturb_size.min(moves.len());
+    let start_idx = rng.gen_range(0..=moves.len() - effective_size);
 
-    for i in 0..perturb_size {
+    for i in 0..effective_size {
         moves[start_idx + i] = ALL_MOVES[rng.gen_range(0..ALL_MOVES.len())]
     }
 }

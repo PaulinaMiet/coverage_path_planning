@@ -5,7 +5,7 @@ use std::collections::HashSet;
 pub struct AcoConfig {
     pub n_ants: usize,
     pub n_iterations: usize,
-    pub solution_length: usize, // (rows + cols) * 2
+    pub solution_length: usize, // free_cells * 2
     pub alpha: f64,    // pheromone weight
     pub beta: f64,     // heuristic weight
     pub rho: f64,      // evaporation rate

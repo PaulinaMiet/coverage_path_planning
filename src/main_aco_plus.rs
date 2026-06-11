@@ -1,5 +1,3 @@
-// main_aco_plus.rs — Entry point for ACO+
-
 mod shared;
 mod aco_plus;
 
@@ -8,12 +6,9 @@ use aco_plus::AcoConfig;
 use std::fs;
 use std::io::Write;
 
-// ── Mode toggle ───────────────────────────────────────────────
-// true  → Taguchi L18 experiment (no normal CSV/JSON output)
-// false → normal single run (default behaviour)
-const TAGUCHI_MODE: bool = false;
 
-// Number of replications per L18 row (ACO+ is stochastic)
+const TAGUCHI_MODE: bool = true;
+
 const REPS: usize = 10;
 
 fn main() {
@@ -23,8 +18,6 @@ fn main() {
         run_normal();
     }
 }
-
-// ── Normal run ────────────────────────────────────────────────
 
 fn run_normal() {
     let grid = parse_grid(INSTANCE);
@@ -36,10 +29,7 @@ fn run_normal() {
 
     print_neighbour_summary(&grid);
 
-    // ── 20×20 diagnostic (Row 9 config, MMAS bounds) ──────────
-    // Compare against the pre-MMAS plateau (~255k both with and without
-    // restarts). Restart stays on; set RESTART_AFTER = 0 to isolate the
-    // effect of the bounds alone.
+
     const N_ITERATIONS:  usize = 10_000;
     const RESTART_AFTER: usize = 250;
 
@@ -48,10 +38,9 @@ fn run_normal() {
     cfg.alpha         = 0.5;
     cfg.beta          = 5.0;
     cfg.rho           = 0.05;
-    cfg.q0            = 0.9;   // was 0.5 (Row 9) — tuned under the old scheme;
-                               // high exploitation is what refinement needs
+    cfg.q0            = 0.9;
     cfg.local_rho     = 0.1;
-    cfg.tabu_size     = 0;     // match the Taguchi runs
+    cfg.tabu_size     = 0;
     cfg.n_iterations  = N_ITERATIONS;
     cfg.restart_after = RESTART_AFTER;
 
@@ -62,7 +51,6 @@ fn run_normal() {
 
     let result = aco_plus::run(&grid, &cfg);
 
-    // Print convergence — only lines where fitness improved
     let mut last = f64::MAX;
     for log in &result.history {
         if log.fitness < last {
@@ -85,17 +73,11 @@ fn run_normal() {
     save_json(&result, &grid, &run_tag, "aco_plus", &cfg.to_json_map());
 }
 
-// ── Taguchi L18 run ───────────────────────────────────────────
 
 fn run_taguchi() {
     let grid = parse_grid(INSTANCE);
     let stem = instance_stem(INSTANCE);
 
-    // ── L18 orthogonal array ──────────────────────────────────
-    // Each row is [n_ants_lvl, alpha_lvl, beta_lvl, rho_lvl, q0_lvl, local_rho_lvl, tabu_size_lvl].
-    // Values are level indices (0/1/2) into the level arrays below.
-    // Derived from L18(2^1 × 3^7) using all 7 columns.
-    // Every pair of level combinations appears exactly twice.
     let l18: [[usize; 6]; 18] = [
         [0, 0, 0, 0, 0, 0], // row  1
         [1, 1, 1, 1, 1, 1], // row  2
@@ -119,15 +101,12 @@ fn run_taguchi() {
 
     // Parameter levels
     // Shared with Basic ACO: n_ants, alpha, beta, rho, q0
-    // ACO+ exclusive: local_rho
+    // ACO+ only: local_rho
     let n_ants_lvl     = [20_usize,  50,    100  ];
     let alpha_lvl     = [0.5_f64,   1.0,   2.0   ];
     let beta_lvl      = [1.0_f64,   3.0,   5.0   ];
     let rho_lvl       = [0.01_f64,  0.05,  0.1   ];
     let q0_lvl        = [0.5_f64,   0.7,   0.9  ];
-    // ACS local update strength ξ — levels bracket the canonical 0.1
-    // (Dorigo & Gambardella 1997). Old levels {0.01, 0.03, 0.05} belonged to
-    // the destructive pure-decay rule and are no longer meaningful.
     let local_rho_lvl = [0.05_f64,  0.1,   0.2   ];
     let n_iters: usize = 1500;
 
@@ -135,7 +114,6 @@ fn run_taguchi() {
 
     ensure_results_dir();
 
-    // Convergence CSV — one averaged running-best curve per L18 row
     let csv_path = format!("results/taguchi_aco_plus_{}_convergence.csv", stem);
     let mut csv_file = fs::File::create(&csv_path).expect("could not create convergence CSV");
     writeln!(csv_file, "row,iteration,mean_fitness").unwrap();
@@ -173,20 +151,18 @@ fn run_taguchi() {
             local_rho,
             q0,
             tabu_size: 0,
-            restart_after: 0, // restarts off during tuning — keeps rows comparable
+            restart_after: 0,
         };
 
         let mut rep_fitnesses: Vec<f64> = Vec::with_capacity(REPS);
         let mut best_overall            = f64::MAX;
         let mut best_moves: Vec<Move>   = Vec::new();
 
-        // Accumulates running-best at each iteration across all reps (for averaging)
         let mut conv_sum = vec![0.0_f64; n_iters];
 
         for _ in 0..REPS {
             let result = aco_plus::run(&grid, &cfg);
 
-            // Build running-best convergence curve from iteration history
             let mut running = f64::MAX;
             for (i, log) in result.history.iter().enumerate() {
                 running = running.min(log.fitness);
@@ -202,7 +178,6 @@ fn run_taguchi() {
             }
         }
 
-        // ── Statistics ────────────────────────────────────────
         let mean_fit = rep_fitnesses.iter().sum::<f64>() / REPS as f64;
         let variance = rep_fitnesses
             .iter()
@@ -210,20 +185,16 @@ fn run_taguchi() {
             .sum::<f64>()
             / REPS as f64;
         let std_dev  = variance.sqrt();
-        // S/N ratio — smaller-is-better: SN = -10 × log10( mean(yi²) )
         let mse      = rep_fitnesses.iter().map(|x| x * x).sum::<f64>() / REPS as f64;
         let sn_ratio = -10.0 * mse.log10();
 
-        // Write averaged convergence rows to CSV
         for (i, &sum) in conv_sum.iter().enumerate() {
             writeln!(csv_file, "{},{},{:.4}", row_idx + 1, i, sum / REPS as f64).unwrap();
         }
 
-        // Best path detail (re-evaluated for clean fitness breakdown)
         let best_path = decode(&best_moves, &grid);
         let best_fit  = evaluate(&best_path, &grid);
 
-        // ── Build JSON entry for this row ─────────────────────
         let rep_vals: String = rep_fitnesses
             .iter()
             .map(|x| format!("{:.4}", x))
@@ -273,7 +244,6 @@ fn run_taguchi() {
         );
     }
 
-    // ── Write summary JSON ────────────────────────────────────
     let json_path    = format!("results/taguchi_aco_plus_{}.json", stem);
     let json_content = format!(
         "{{\n\
@@ -294,7 +264,6 @@ fn run_taguchi() {
     println!("  convergence → {}", csv_path);
 }
 
-// ── Helper ────────────────────────────────────────────────────
 
 fn print_neighbour_summary(grid: &Grid) {
     let map = aco_plus::build_neighbour_map(grid);

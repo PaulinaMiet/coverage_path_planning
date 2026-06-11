@@ -1,5 +1,4 @@
-// aco_plus.rs — ACO+ (Improved Ant Colony Optimisation)
-// 20260607
+// ACO+ (Improved Ant Colony Optimisation)
 
 use crate::shared::*;
 use rand::Rng;
@@ -19,9 +18,7 @@ pub struct AcoConfig {
     pub q0:        f64,   // exploitation probability (ACS-style)
     pub tabu_size: usize, // short-term memory — blocks last N visited cells
 
-    // MMAS-style stagnation restart: if best-so-far has not improved for this
-    // many iterations, reset all pheromone to τ₀ (keeping the incumbent best).
-    // 0 disables the restart.
+
     pub restart_after: usize,
 }
 
@@ -34,10 +31,10 @@ impl AcoConfig {
             alpha:           1.0,
             beta:            5.0,
             rho:             0.05,
-            local_rho:       0.1,   // ACS-canonical ξ (Dorigo & Gambardella 1997)
-            q0:              0.9,   // high exploitation balances local-update diversification
+            local_rho:       0.1,
+            q0:              0.9,
             tabu_size:       6,
-            restart_after:   250,   // stagnation restart; set 0 to disable
+            restart_after:   250,
         }
     }
 
@@ -51,44 +48,35 @@ impl AcoConfig {
     }
 }
 
-// ── Pheromone ─────────────────────────────────────────────────
 
-// τ[row][col][move_idx] — 8 directions matching ALL_MOVES index contract
 type Pheromone = Vec<Vec<[f64; 8]>>;
 
 fn init_pheromone(grid: &Grid, tau: f64) -> Pheromone {
     vec![vec![[tau; 8]; grid[0].len()]; grid.len()]
 }
 
-/// Cost of one heuristic-only greedy construction. Seeds the MMAS bounds
-/// before any colony solution exists.
+
 fn greedy_cost(
     grid:          &Grid,
     neighbour_map: &NeighbourMap,
     cfg:           &AcoConfig,
     rng:           &mut impl Rng,
 ) -> f64 {
-    // One greedy ant: uniform pheromone, pure exploitation, no local update
     let greedy_cfg = AcoConfig { q0: 1.0, local_rho: 0.0, ..cfg.clone() };
     let mut uniform = init_pheromone(grid, 1.0);
     let moves = build_solution(grid, &mut uniform, neighbour_map, &greedy_cfg, 1.0, rng);
     evaluate(&decode(&moves, grid), grid).total.max(1.0)
 }
 
-/// MMAS bounds (Stützle & Hoos 2000), adapted to this deposit scheme.
-/// τ_max is the equilibrium pheromone of an edge deposited every iteration
-/// (deposit/ρ = 1/(ρ·C_best)); τ_min keeps every edge selectable, capping
-/// the exploit/explore ratio at 2·n_free instead of leaving it unbounded.
+
 fn mmas_bounds(best_cost: f64, n_free: f64, rho: f64) -> (f64, f64) {
     let tau_max = 1.0 / (rho * best_cost);
     let tau_min = tau_max / (2.0 * n_free);
     (tau_min, tau_max)
 }
 
-// ── Neighbour map ─────────────────────────────────────────────
 
-// Pre-built once per run. Each cell stores (move_idx, destination) for every
-// legal move. Illegal moves are structurally absent — no runtime wall checks.
+
 type NeighbourMap = Vec<Vec<Vec<(usize, Position)>>>;
 
 pub fn build_neighbour_map(grid: &Grid) -> NeighbourMap {
@@ -96,8 +84,7 @@ pub fn build_neighbour_map(grid: &Grid) -> NeighbourMap {
     let cols = grid[0].len();
     let mut map: NeighbourMap = vec![vec![Vec::new(); cols]; rows];
 
-    // Deltas in ALL_MOVES order:
-    // 0=Up 1=Down 2=Left 3=Right 4=UpLeft 5=UpRight 6=DownLeft 7=DownRight
+
     let deltas: [(isize, isize); 8] = [
         (-1,  0), ( 1,  0), ( 0, -1), ( 0,  1),
         (-1, -1), (-1,  1), ( 1, -1), ( 1,  1),
@@ -119,7 +106,6 @@ pub fn build_neighbour_map(grid: &Grid) -> NeighbourMap {
     map
 }
 
-// ── Connectivity check ────────────────────────────────────────
 
 fn flood_fill_check(
     grid: &Grid,
@@ -152,15 +138,7 @@ fn flood_fill_check(
 }
 
 
-// Cost-normalised coverage gain: new coverage per unit of distance.
-// A straight move covers 1 new cell for cost 1; a diagonal covers 1 new cell
-// for cost √2, so all eight moves now compete on equal footing and straight
-// sweeps win when both reach unvisited area.
-//
-// The previous version added a diagonal "opens up new area" bonus (up to +2),
-// which β = 5 amplified into a ~32× preference for diagonals. On 20×20 grids
-// this drove diagonal zig-zag paths with ~300 revisits; efficient coverage
-// paths are orthogonal sweeps. +1 keeps the weight > 0.
+
 fn coverage_gain(pos: Position, mv: Move, grid: &Grid, visited: &HashSet<Position>) -> f64 {
     let dest_cells = apply_move(pos, mv, grid);
     if dest_cells.is_empty() { return 1.0; }
@@ -177,14 +155,13 @@ fn coverage_gain(pos: Position, mv: Move, grid: &Grid, visited: &HashSet<Positio
     (base + 1.0) / cost
 }
 
-// ── Ant construction ──────────────────────────────────────────
 
 fn build_solution(
     grid:          &Grid,
-    pheromone:     &mut Pheromone,  // mut: local update is applied in-place
+    pheromone:     &mut Pheromone,
     neighbour_map: &NeighbourMap,
     cfg:           &AcoConfig,
-    tau_min:       f64,             // exploration floor — target of the local update
+    tau_min:       f64,
     rng:           &mut impl Rng,
 ) -> Vec<Move> {
     let mut moves   = Vec::with_capacity(cfg.solution_length);
@@ -192,13 +169,11 @@ fn build_solution(
     let mut visited: HashSet<Position> = HashSet::new();
     visited.insert(pos);
 
-    // Short-term tabu window — blocks the last tabu_size destinations
     let mut tabu: VecDeque<Position> = VecDeque::new();
 
     let total_free = free_cells(grid);
 
     for _ in 0..cfg.solution_length {
-        // Early exit: full coverage reached, no point continuing
         if visited.len() == total_free { break; }
 
         let (r, c) = pos;
@@ -206,7 +181,6 @@ fn build_solution(
         let options = &neighbour_map[r][c];
         if options.is_empty() { break; }
 
-        // Score each legal neighbour; zero out tabu destinations
         let weights: Vec<f64> = options.iter()
             .map(|&(mv_idx, dest)| {
                 if tabu.contains(&dest) {
@@ -218,8 +192,7 @@ fn build_solution(
             })
             .collect();
 
-        // Safety valve: if every neighbour is tabu, lift the restriction
-        // so the ant can escape a dead-end corridor
+
         let all_tabu = weights.iter().all(|&w| w == 0.0);
         let effective: Vec<f64> = if all_tabu {
             options.iter()
@@ -233,7 +206,6 @@ fn build_solution(
             weights
         };
 
-        // Select move: exploit (q0) or explore (roulette wheel)
         let chosen_idx = if rng.r#gen::<f64>() < cfg.q0 {
             effective.iter().enumerate()
                 .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
@@ -254,20 +226,14 @@ fn build_solution(
         moves.push(mv);
 
         // ACS local update: τ ← (1−ξ)·τ + ξ·τ_min
-        // Pulls the trail just used back toward the exploration floor so
-        // subsequent ants in this iteration are nudged away from the same path.
-        // Unlike pure decay (τ ← (1−ξ)·τ), this can never erase a trail —
-        // heavily used edges converge to τ_min, not zero, preserving the
-        // learned signal across iterations.
+
         pheromone[r][c][mv_idx] =
             (1.0 - cfg.local_rho) * pheromone[r][c][mv_idx] + cfg.local_rho * tau_min;
 
-        // Advance one cell and record coverage
         let new_cells = apply_move(pos, mv, grid);
         if let Some(&last) = new_cells.last() { pos = last; }
         for p in new_cells { visited.insert(p); }
 
-        // Slide tabu window forward
         tabu.push_back(dest);
         if tabu.len() > cfg.tabu_size {
             tabu.pop_front();
@@ -279,7 +245,6 @@ fn build_solution(
 
 
 pub fn run(grid: &Grid, cfg: &AcoConfig) -> Result {
-    // Connectivity check — warn if any free cell is unreachable from (0,0)
     match flood_fill_check(grid, START) {
         Ok(n)  => println!("[ACO+] flood-fill OK — {} free cells all connected", n),
         Err(n) => println!("[ACO+] WARNING: {} free cells unreachable from start", n),
@@ -289,27 +254,20 @@ pub fn run(grid: &Grid, cfg: &AcoConfig) -> Result {
 
     let mut rng = rand::thread_rng();
 
-    // MMAS adaptive bounds, seeded from one greedy construction and
-    // re-tightened every time the best-so-far improves.
+
     let n_free = free_cells(grid) as f64;
     let c_greedy = greedy_cost(grid, &neighbour_map, cfg, &mut rng);
     let (mut tau_min, mut tau_max) = mmas_bounds(c_greedy, n_free, cfg.rho);
     println!("[ACO+] C_greedy = {:.2}  tau_max = {:.4e}  tau_min = {:.4e}", c_greedy, tau_max, tau_min);
 
-    // MMAS initialises at τ_max: all edges equally attractive → maximum
-    // early exploration, with the bounds preventing early lock-in.
+
     let mut pheromone = init_pheromone(grid, tau_max);
     let mut best_moves: Vec<Move> = Vec::new();
     let mut best_fit  = f64::MAX;
     let mut history   = Vec::new();
-    let mut stagnant  = 0usize; // iterations since best-so-far last improved
+    let mut stagnant  = 0usize;
 
-    // MMAS global-best deposit schedule: normally the iteration-best ant
-    // deposits (exploration), but every GB_EVERY-th iteration the best-so-far
-    // deposits instead, steering the colony back toward the incumbent so each
-    // restart epoch refines it rather than resampling from scratch. The first
-    // GB_WARMUP iterations after a restart stay iteration-best only, so the
-    // epoch can explore before being pulled in.
+
     const GB_EVERY:  usize = 5;
     const GB_WARMUP: usize = 50;
     let mut since_restart = 0usize;
@@ -325,9 +283,7 @@ pub fn run(grid: &Grid, cfg: &AcoConfig) -> Result {
             }
         }
 
-        // Global evaporation — applied once per iteration after all ants,
-        // with both MMAS bounds enforced: the floor keeps every edge
-        // selectable, the ceiling stops any edge running away.
+
         for row in &mut pheromone {
             for cell in row {
                 for tau in cell.iter_mut() {
@@ -341,14 +297,12 @@ pub fn run(grid: &Grid, cfg: &AcoConfig) -> Result {
                 best_fit   = fit.total;
                 best_moves = mvs.clone();
                 stagnant   = 0;
-                // Better incumbent → tighter bounds around the new cost scale
                 (tau_min, tau_max) = mmas_bounds(best_fit, n_free, cfg.rho);
             } else {
                 stagnant += 1;
             }
 
-            // Choose the depositing solution: iteration-best by default,
-            // best-so-far on the GB schedule (capped at τ_max either way)
+
             let use_gb = !best_moves.is_empty()
                 && since_restart >= GB_WARMUP
                 && iter % GB_EVERY == 0;
@@ -378,9 +332,6 @@ pub fn run(grid: &Grid, cfg: &AcoConfig) -> Result {
         }
         since_restart += 1;
 
-        // Stagnation restart: reset the trail to τ_max (NOT τ_min) so the
-        // colony re-explores from a fully uniform state, while the incumbent
-        // best solution is kept.
         if cfg.restart_after > 0 && stagnant >= cfg.restart_after {
             for row in &mut pheromone {
                 for cell in row {

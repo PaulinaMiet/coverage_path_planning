@@ -1,26 +1,5 @@
 // aco_plus.rs — ACO+ (Improved Ant Colony Optimisation)
 // 20260607
-//
-// Revision 20260611 — ACS-grounded pheromone management:
-//   * local update is now τ ← (1−ξ)τ + ξτ₀ (was pure decay τ ← (1−ξ)τ,
-//     which erased trails toward zero and made ACO+ underperform base ACO
-//     on 10×10 instances)
-//   * τ₀ auto-computed as 1/(n_free · C_greedy) from one greedy construction,
-//     replacing the fixed tau_init = 1.0 that swamped the 1/fitness deposits
-//   * global evaporation clamped below at τ₀ so unexplored edges stay reachable
-//
-// Revision 20260611b — MMAS-style adaptive pheromone bounds (Stützle & Hoos):
-//   The fixed τ₀ floor left the exploit/explore ratio unbounded (deposits
-//   ~10⁴× above the floor), so the colony committed to one basin within a few
-//   iterations — the 20×20 stagnation signature. Now:
-//   * τ_max = 1/(ρ · C_best), recomputed whenever the best-so-far improves
-//   * τ_min = τ_max / (2 · n_free) — caps the exploit/explore ratio at ~2n
-//   * pheromone is initialised AND restart-reset to τ_max (maximum
-//     exploration), and clamped into [τ_min, τ_max] every iteration
-//   * the ACS local update now pulls used edges toward τ_min
-//   * global-best deposit schedule: every 5th iteration (after a 50-iteration
-//     post-restart warmup) the best-so-far deposits instead of the
-//     iteration-best, so restart epochs refine the incumbent
 
 use crate::shared::*;
 use rand::Rng;

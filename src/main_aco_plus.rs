@@ -11,7 +11,7 @@ use std::io::Write;
 // ── Mode toggle ───────────────────────────────────────────────
 // true  → Taguchi L18 experiment (no normal CSV/JSON output)
 // false → normal single run (default behaviour)
-const TAGUCHI_MODE: bool = true;
+const TAGUCHI_MODE: bool = false;
 
 // Number of replications per L18 row (ACO+ is stochastic)
 const REPS: usize = 10;
@@ -173,7 +173,7 @@ fn run_taguchi() {
             local_rho,
             q0,
             tabu_size: 0,
-            restart_after: 250, // fixed feature of ACO+, not a tuned factor
+            restart_after: 0, // restarts off during tuning — keeps rows comparable
         };
 
         let mut rep_fitnesses: Vec<f64> = Vec::with_capacity(REPS);

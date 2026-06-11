@@ -6,10 +6,18 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 
 // Config ─────────────────────────────────────────────────────
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum StartingStrategy {
+    Mst,
+    Snake,
+    Random,
+}
+
 pub struct IlsConfig {
-    pub n_iterations: usize,  // Total ILS cycles
-    pub ls_iterations: usize, // Local search attempts per cycle
-    pub perturb_size: usize,  // How many moves to change during perturbation
+    pub n_iterations: usize,        // Total ILS cycles
+    pub ls_iterations: usize,       // Local search attempts per cycle
+    pub perturb_size: usize,        // How many moves to change during perturbation
+    pub strategy: StartingStrategy, //Starting path
 }
 
 impl IlsConfig {
@@ -18,12 +26,13 @@ impl IlsConfig {
             n_iterations: 100,
             ls_iterations: 150,
             perturb_size: 3,
+            strategy: StartingStrategy::Mst,
         }
     }
     pub fn to_json_map(&self) -> String {
         format!(
-            "\"n_iterations\": {}, \"ls_iterations\": {}, \"perturb_size\": {}",
-            self.n_iterations, self.ls_iterations, self.perturb_size
+            "\"n_iterations\": {}, \"ls_iterations\": {}, \"perturb_size\": {}, \"strategy\": \"{:?}\"",
+            self.n_iterations, self.ls_iterations, self.perturb_size, self.strategy
         )
     }
 }
@@ -101,18 +110,58 @@ fn add_neighbors(
     }
 }
 
+pub fn compute_snake_moves(grid: &Grid) -> Vec<Move> {
+    let rows = grid.len();
+    let cols = grid[0].len();
+    let mut moves = Vec::new();
+
+    for c in 0..cols {
+        if c % 2 == 0 {
+            // Even column: go down
+            for _ in 0..rows - 1 {
+                moves.push(Move::Down);
+            }
+        } else {
+            // Odd column: go up
+            for _ in 0..rows - 1 {
+                moves.push(Move::Up);
+            }
+        }
+
+        // Move right if not at the last column
+        if c < cols - 1 {
+            moves.push(Move::Right);
+        }
+    }
+    moves
+}
+
+/// Random move sequence. Length scales with grid area to allow full coverage.
+pub fn compute_random_solution(grid: &Grid, rng: &mut impl Rng) -> Vec<Move> {
+    let len = grid.len() * grid[0].len() * 2;
+    (0..len)
+        .map(|_| ALL_MOVES[rng.gen_range(0..ALL_MOVES.len())])
+        .collect()
+}
+
 // ── Main ILS loop ──────────────────────────────────────────────
 
-pub fn ils_run(grid: &Grid, cfg: &IlsConfig) -> Result {
-    let mst = compute_mst(grid);
-    let mut current_moves = mst_to_moves(&mst);
+pub fn ils_run(grid: &Grid, cfg: &IlsConfig, rng: &mut impl Rng) -> Result {
+    let mut current_moves = match cfg.strategy {
+        StartingStrategy::Mst => {
+            let mst = compute_mst(grid);
+            mst_to_moves(&mst)
+        }
+        StartingStrategy::Snake => compute_snake_moves(grid),
+        StartingStrategy::Random => compute_random_solution(grid, rng),
+    };
 
     let mut best_moves = current_moves.clone();
     let mut best_fitness = evaluate(&decode(&best_moves, grid), grid);
     let mut history = Vec::new();
 
     for i in 0..cfg.n_iterations {
-        local_search(&mut current_moves, grid, cfg.ls_iterations);
+        local_search(&mut current_moves, grid, cfg.ls_iterations, rng);
 
         let fitness = evaluate(&decode(&current_moves, grid), grid);
 
@@ -129,7 +178,7 @@ pub fn ils_run(grid: &Grid, cfg: &IlsConfig) -> Result {
             unvisited: best_fitness.unvisited,
             moves: best_moves.clone(),
         });
-        perturb(&mut current_moves, cfg.perturb_size);
+        perturb(&mut current_moves, cfg.perturb_size, rng);
     }
 
     Result {
@@ -195,8 +244,10 @@ pub fn mst_to_moves(mst: &[Edge]) -> Vec<Move> {
     positions_to_moves(&path)
 }
 
-fn local_search(moves: &mut Vec<Move>, grid: &Grid, imp: usize) {
-    let mut rng = rand::thread_rng();
+fn local_search(moves: &mut Vec<Move>, grid: &Grid, imp: usize, rng: &mut impl Rng) {
+    if moves.is_empty() {
+        return;
+    }
     let mut current_fitness = evaluate(&decode(moves, grid), grid).total;
 
     // try n random improvements
@@ -216,11 +267,14 @@ fn local_search(moves: &mut Vec<Move>, grid: &Grid, imp: usize) {
     }
 }
 
-fn perturb(moves: &mut Vec<Move>, perturb_size: usize) {
-    let mut rng = rand::thread_rng();
-    let start_idx = rng.gen_range(0..moves.len().saturating_sub(perturb_size));
+fn perturb(moves: &mut Vec<Move>, perturb_size: usize, rng: &mut impl Rng) {
+    if moves.is_empty() || perturb_size == 0 {
+        return;
+    }
+    let effective_size = perturb_size.min(moves.len());
+    let start_idx = rng.gen_range(0..=moves.len() - effective_size);
 
-    for i in 0..perturb_size {
+    for i in 0..effective_size {
         moves[start_idx + i] = ALL_MOVES[rng.gen_range(0..ALL_MOVES.len())]
     }
 }

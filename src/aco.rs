@@ -2,18 +2,15 @@ use crate::shared::*;
 use rand::Rng;
 use std::collections::HashSet;
 
-//  Config ─────────────────────────────────────────────────────
-
 pub struct AcoConfig {
     pub n_ants: usize,
     pub n_iterations: usize,
-    pub solution_length: usize, //  rows      +    cols       × 2
-    //e.g. (  10      +     10      ) × 2  =  40 moves  ← for 10×10 grid
-    pub alpha: f64,    // pheromone influence
-    pub beta: f64,     // heuristic influence
-    pub rho: f64,      // evaporation rate (0–1)
-    pub tau_init: f64, // starting pheromone on every edge
-    pub q0: f64,       // probability to exploit best move (ACS-style)
+    pub solution_length: usize, // free_cells * 2
+    pub alpha: f64,    // pheromone weight
+    pub beta: f64,     // heuristic weight
+    pub rho: f64,      // evaporation rate
+    pub tau_init: f64, // initial pheromone value
+    pub q0: f64,       // exploitation probability
 }
 
 impl AcoConfig {
@@ -37,17 +34,14 @@ impl AcoConfig {
     }
 }
 
-// Pheromone 
-
-// τ[row][col][move_idx]  how good is move m when standing at cell (r,c)?
+// tau[row][col][move_idx]: pheromone strength for each move at each cell
 type Pheromone = Vec<Vec<[f64; 8]>>;
 
 fn init_pheromone(grid: &Grid, tau: f64) -> Pheromone {
     vec![vec![[tau; 8]; grid[0].len()]; grid.len()]
 }
 
-// Heuristic
-// New free cells reachable by move m from pos. +1 avoids zero weight
+// +1 avoids zero weight when no new cells are reachable
 fn coverage_gain(pos: Position, mv: Move, grid: &Grid, visited: &HashSet<Position>) -> f64 {
     apply_move(pos, mv, grid)
         .iter()
@@ -55,8 +49,6 @@ fn coverage_gain(pos: Position, mv: Move, grid: &Grid, visited: &HashSet<Positio
         .count() as f64
         + 1.0
 }
-
-// Ant construction
 
 fn build_solution(
     grid: &Grid,
@@ -80,7 +72,7 @@ fn build_solution(
             .collect();
 
         let mv_idx = if rng.r#gen::<f64>() < cfg.q0 {
-            // exploit: take highest score
+            // exploit: pick highest score
             weights
                 .iter()
                 .enumerate()
@@ -88,7 +80,7 @@ fn build_solution(
                 .map(|(i, _)| i)
                 .unwrap()
         } else {
-            // explore: roulette wheel
+            // explore: roulette wheel selection
             let total: f64 = weights.iter().sum();
             let mut pick = rng.r#gen::<f64>() * total;
             let mut chosen = 7;
@@ -116,8 +108,6 @@ fn build_solution(
     moves
 }
 
-//  Main ACO loop //
-
 pub fn aco_run(grid: &Grid, cfg: &AcoConfig) -> Result {
     let mut rng = rand::thread_rng();
     let mut pheromone = init_pheromone(grid, cfg.tau_init);
@@ -126,7 +116,6 @@ pub fn aco_run(grid: &Grid, cfg: &AcoConfig) -> Result {
     let mut history = Vec::new();
 
     for iter in 0..cfg.n_iterations {
-        // Build solutions, track best ant this iteration (full fitness)
         let mut iter_best: Option<(Vec<Move>, Fitness)> = None;
 
         for _ in 0..cfg.n_ants {
@@ -140,7 +129,7 @@ pub fn aco_run(grid: &Grid, cfg: &AcoConfig) -> Result {
             }
         }
 
-        // Evaporate
+        // evaporate
         for row in &mut pheromone {
             for cell in row {
                 for tau in cell.iter_mut() {
@@ -150,7 +139,7 @@ pub fn aco_run(grid: &Grid, cfg: &AcoConfig) -> Result {
         }
 
         if let Some((mvs, fit)) = iter_best {
-            // Deposit on best ant's trail
+            // deposit on best ant's path
             let deposit = 1.0 / fit.total;
             let mut pos = (0usize, 0usize);
             for &mv in &mvs {
@@ -167,7 +156,6 @@ pub fn aco_run(grid: &Grid, cfg: &AcoConfig) -> Result {
                 best_moves = mvs.clone();
             }
 
-            // Log every iteration
             history.push(IterationLog {
                 iteration: iter,
                 fitness: fit.total,

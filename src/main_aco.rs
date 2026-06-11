@@ -6,13 +6,10 @@ use shared::*;
 use std::fs;
 use std::io::Write;
 
-// ── Mode toggle ───────────────────────────────────────────────
-// true  → Taguchi L18 experiment (no normal CSV/JSON output)
-// false → normal single run (default behaviour)
+// true = Taguchi L18 experiment, false = single run
 const TAGUCHI_MODE: bool = true;
 
-// Number of replications per L18 row (ACO is stochastic)
-const REPS: usize = 10;
+const REPS: usize = 10; // replications per L18 row
 
 fn main() {
     if TAGUCHI_MODE {
@@ -21,8 +18,6 @@ fn main() {
         run_normal();
     }
 }
-
-// ── Normal run ────────────────────────────────────────────────
 
 fn run_normal() {
     let alg = "aco";
@@ -40,7 +35,7 @@ fn run_normal() {
     let cfg = AcoConfig::default_for(&grid);
     let result = aco::aco_run(&grid, &cfg);
 
-    // Print convergence (only lines where fitness improved)
+    // print only iterations where fitness improved
     let mut last = f64::MAX;
     for log in &result.history {
         if log.fitness < last {
@@ -63,39 +58,32 @@ fn run_normal() {
     save_json(&result, &grid, &run_tag, alg, &cfg.to_json_map());
 }
 
-// ── Taguchi L18 run ───────────────────────────────────────────
-
 fn run_taguchi() {
     let grid = parse_grid(INSTANCE);
     let stem = instance_stem(INSTANCE);
 
-    // ── L18 orthogonal array ──────────────────────────────────
-    // Each row is [n_ants_lvl, alpha_lvl, beta_lvl, rho_lvl, q0_lvl].
-    // Values are level indices (0/1/2) into the level arrays below.
-    // Derived from L18(2^1 × 3^7) using columns B–F.
-    // Verified orthogonal: every pair of level combinations appears exactly twice.
+    // L18 orthogonal array: each row is [n_ants, alpha, beta, rho, q0] level indices
     let l18: [[usize; 5]; 18] = [
-        [0, 0, 0, 0, 0], // row  1
-        [0, 1, 1, 1, 1], // row  2
-        [0, 2, 2, 2, 2], // row  3
-        [1, 0, 0, 1, 1], // row  4
-        [1, 1, 1, 2, 2], // row  5
-        [1, 2, 2, 0, 0], // row  6
-        [2, 0, 1, 0, 2], // row  7
-        [2, 1, 2, 1, 0], // row  8
-        [2, 2, 0, 2, 1], // row  9
-        [0, 0, 2, 2, 1], // row 10
-        [0, 1, 0, 0, 2], // row 11
-        [0, 2, 1, 1, 0], // row 12
-        [1, 0, 1, 2, 0], // row 13
-        [1, 1, 2, 0, 1], // row 14
-        [1, 2, 0, 1, 2], // row 15
-        [2, 0, 2, 1, 2], // row 16
-        [2, 1, 0, 2, 0], // row 17
-        [2, 2, 1, 0, 1], // row 18
+        [0, 0, 0, 0, 0],
+        [0, 1, 1, 1, 1],
+        [0, 2, 2, 2, 2],
+        [1, 0, 0, 1, 1],
+        [1, 1, 1, 2, 2],
+        [1, 2, 2, 0, 0],
+        [2, 0, 1, 0, 2],
+        [2, 1, 2, 1, 0],
+        [2, 2, 0, 2, 1],
+        [0, 0, 2, 2, 1],
+        [0, 1, 0, 0, 2],
+        [0, 2, 1, 1, 0],
+        [1, 0, 1, 2, 0],
+        [1, 1, 2, 0, 1],
+        [1, 2, 0, 1, 2],
+        [2, 0, 2, 1, 2],
+        [2, 1, 0, 2, 0],
+        [2, 2, 1, 0, 1],
     ];
 
-    // Parameter levels
     let n_ants_lvl = [20_usize, 50, 100];
     let alpha_lvl  = [0.5_f64,  1.0, 2.0];
     let beta_lvl   = [1.0_f64,  3.0, 5.0];
@@ -106,7 +94,6 @@ fn run_taguchi() {
 
     ensure_results_dir();
 
-    // Convergence CSV — one averaged running-best curve per L18 row
     let csv_path = format!("results/taguchi_{}_convergence.csv", stem);
     let mut csv_file = fs::File::create(&csv_path).expect("could not create convergence CSV");
     writeln!(csv_file, "row,iteration,mean_fitness").unwrap();
@@ -140,13 +127,12 @@ fn run_taguchi() {
         let mut best_overall             = f64::MAX;
         let mut best_moves: Vec<Move>   = Vec::new();
 
-        // Accumulates running-best at each iteration across all reps (for averaging)
+        // sum of running-best per iteration across reps, used for averaged convergence curve
         let mut conv_sum = vec![0.0_f64; n_iters];
 
         for _ in 0..REPS {
             let result = aco::aco_run(&grid, &cfg);
 
-            // Build running-best convergence curve from iteration history
             let mut running = f64::MAX;
             for (i, log) in result.history.iter().enumerate() {
                 running = running.min(log.fitness);
@@ -162,7 +148,6 @@ fn run_taguchi() {
             }
         }
 
-        // ── Statistics ────────────────────────────────────────
         let mean_fit = rep_fitnesses.iter().sum::<f64>() / REPS as f64;
         let variance = rep_fitnesses
             .iter()
@@ -170,20 +155,17 @@ fn run_taguchi() {
             .sum::<f64>()
             / REPS as f64;
         let std_dev  = variance.sqrt();
-        // S/N ratio — smaller-is-better: SN = -10 × log10( mean(yi²) )
+        // S/N smaller-is-better: -10 * log10(mean(y^2))
         let mse      = rep_fitnesses.iter().map(|x| x * x).sum::<f64>() / REPS as f64;
         let sn_ratio = -10.0 * mse.log10();
 
-        // Write averaged convergence rows to CSV
         for (i, &sum) in conv_sum.iter().enumerate() {
             writeln!(csv_file, "{},{},{:.4}", row_idx + 1, i, sum / REPS as f64).unwrap();
         }
 
-        // Best path detail (re-evaluated for clean fitness breakdown)
         let best_path = decode(&best_moves, &grid);
         let best_fit  = evaluate(&best_path, &grid);
 
-        // ── Build JSON entry for this row ─────────────────────
         let rep_vals: String = rep_fitnesses
             .iter()
             .map(|x| format!("{:.4}", x))
@@ -236,7 +218,6 @@ fn run_taguchi() {
         );
     }
 
-    // ── Write summary JSON ────────────────────────────────────
     let json_path    = format!("results/taguchi_{}.json", stem);
     let json_content = format!(
         "{{\n\

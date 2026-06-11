@@ -21,12 +21,12 @@ You can run either the ACO or ILS implementation:
 
 **Run ACO:**
 ```bash
-cargo run --bin main_aco
+cargo run --bin aco
 ```
 
 **Run ILS:**
 ```bash
-cargo run --bin main_ils
+cargo run --bin ils
 ```
 
 ##  Project Structure
@@ -49,7 +49,7 @@ Focuses on refining a high-quality initial solution:
 2.  **Local Search**: Stochastic hill-climbing to reduce distance and revisits.
 3.  **Perturbation**: Randomly alters path segments to escape local optima.
 
-## 📊 Results & Visualization
+## Results & Visualization
 
 Every run generates two types of files in the `results/` directory:
 *   `.csv`: A per-iteration log of fitness metrics (distance, revisits, unvisited cells).
@@ -57,4 +57,4 @@ Every run generates two types of files in the `results/` directory:
 
 ##  Configuration
 
-Grids are defined in the `.txt` files in `instances/`. You can change the active instance by modifying the `INSTANCE` constant in `src/main_aco.rs` or `src/main_ils.rs`.
+Grids are defined in the `.txt` files in `instances/`. You can change the active instance by modifying the `INSTANCE` constant in `src/shared.rs`.

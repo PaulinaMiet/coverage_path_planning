@@ -1,44 +1,4 @@
-"""
-plot_path.py
-------------
-Visualizes the best path from a normal single-run output file
-(the flat JSON written by `cargo run` for ACO / ACO+ / ILS).
 
-  >>> HOW TO USE <<<
-  Option A - edit RESULT_FILE below (just under this docstring),
-             then run:  python graph_programs/plot_path.py
-  Option B - pass the file on the command line (overrides RESULT_FILE):
-             python graph_programs/plot_path.py results/cpp_10x10_line_1780864678_aco_plus.json
-
-Relative paths are resolved from the project root, so it works no matter
-which folder you run it from.
-
-The grid (.txt) file is found automatically: the "instance" field in the
-JSON (e.g. "cpp_10x10_line_1780865436") has its timestamp stripped to get
-"cpp_10x10_line", which must exist in instances/.
-
-Output: graph_programs/plots/path_{instance}_{algorithm}.png
-
-Design notes
-------------
-Light "field telemetry" theme, built for documentation:
-  * Field cells are rounded tiles with small gutters (modern map look).
-  * Green tiles  = covered ground; darker green = revisited (x2 / x3+).
-  * Amber tiles  = ground the robot missed; slate tiles = obstacles.
-  * The route is drawn like a navigation app: a white casing line
-    underneath, then a colour-gradient line on top (cyan -> indigo)
-    encoding traversal order, with chevrons showing direction.
-  * A thin progression bar under the map maps colour -> mission time.
-  * All text (telemetry, algorithm parameters, legend) lives in a side
-    panel, so nothing ever covers the field.
-"""
-
-# ============================================================
-#  EDIT HERE: result file to plot (used when no CLI arg given)
-#  Path is relative to the project root (the folder with Cargo.toml).
-# ============================================================
-RESULT_FILE = "results/archiveresult/cpp_10x10_line_1780866318_ils.json"
-# ============================================================
 
 import argparse
 import json
@@ -54,16 +14,12 @@ import numpy as np
 from matplotlib.collections import LineCollection
 from matplotlib.colors import LinearSegmentedColormap
 
-# --- Paths ---
-# Script lives at graph_programs/ inside the project root, so CPP_BASE is one level up.
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CPP_BASE   = os.path.normpath(os.path.join(SCRIPT_DIR, ".."))
 PLOTS_DIR  = os.path.join(SCRIPT_DIR, "plots")
 
-# Pretty names for the header / config card
 ALGO_DISPLAY = {"aco": "ACO", "aco_plus": "ACO+", "ils": "ILS"}
 
-# Nice labels for known config keys (anything unknown falls back to its raw key)
 CONFIG_LABELS = {
     "n_ants":        "ants",
     "n_iterations":  "iterations",
@@ -75,7 +31,6 @@ CONFIG_LABELS = {
     "perturb_size":  "perturb",
 }
 
-# --- Theme (single source of truth for every colour in the figure) ---
 THEME = {
     "fig_bg":      "#F7F8FA",   # overall page
     "map_bg":      "#E4E8EC",   # shows through tile gutters
@@ -94,13 +49,11 @@ THEME = {
     "accent":      "#2962FF",
 }
 
-# Traversal-order gradient: early -> late
 PATH_CMAP = LinearSegmentedColormap.from_list(
     "mission", ["#00BCD4", "#2979FF", "#5E35B1"]
 )
 
 
-# --- Data loading ---
 
 def load_grid(grid_path: str):
     """Parse instance .txt file into a 2D list (0=free, 1=obstacle)."""
@@ -137,7 +90,6 @@ def base_instance_name(instance: str) -> str:
     return re.sub(r"_\d+$", "", instance)
 
 
-# --- Drawing: the field map ---
 
 def draw_field(ax, grid, sol):
     """Draw obstacle/coverage tiles and overlay the gradient route."""
@@ -170,7 +122,6 @@ def draw_field(ax, grid, sol):
             )
             ax.add_patch(tile)
 
-    # -- route: white casing underneath, gradient line on top --
     xs = np.array([p[1] for p in path], dtype=float)
     ys = np.array([nrows - 1 - p[0] for p in path], dtype=float)
     pts = np.column_stack([xs, ys]).reshape(-1, 1, 2)
@@ -190,12 +141,10 @@ def draw_field(ax, grid, sol):
     route.set_array(np.linspace(0.0, 1.0, n_seg))
     ax.add_collection(route)
 
-    # -- cell size in points (drives marker/chevron sizing on any grid) --
     fig = ax.figure
     pos = ax.get_position()
     cell_pt = pos.width * fig.get_figwidth() * 72.0 / ncols
 
-    # -- direction chevrons: rotated triangles at segment midpoints --
     step = max(3, n_seg // 18)
     chev_ms = min(12.0, max(6.0, 0.26 * cell_pt))   # diameter in points
     for i in range(step // 2, n_seg, step):
@@ -210,7 +159,6 @@ def draw_field(ax, grid, sol):
                 color=PATH_CMAP(t), markeredgecolor="white",
                 markeredgewidth=0.7, linestyle="none", zorder=5)
 
-    # -- start / end markers (white halo ring so they read on any tile) --
     d_pt = min(22.0, max(13.0, 0.38 * cell_pt))     # marker diameter in points
     ms = d_pt ** 2
     ax.scatter([xs[0]], [ys[0]], s=ms * 1.9, color="white", zorder=6)
@@ -254,7 +202,6 @@ def draw_progress_bar(ax):
                  pad=2, loc="center")
 
 
-# --- Drawing: the side panel ---
 
 class _Panel:
     """Stacks rounded cards top-down in the panel axis.
@@ -314,7 +261,6 @@ def draw_panel(ax, sol, coverage_pct):
     n_steps = len(sol["path"]) - 1
     warn = "#E65100"
 
-    # ---- card 1: mission telemetry (incl. coverage bar) ----
     y = panel.card("MISSION TELEMETRY", 6, extra=0.040)
     y = panel.kv(y, "fitness",   f"{sol['fitness']:,.2f}", THEME["accent"], True)
     y = panel.kv(y, "distance",  f"{sol['distance']:,.2f}")
@@ -337,7 +283,6 @@ def draw_panel(ax, sol, coverage_pct):
         facecolor=THEME["start"] if coverage_pct >= 100 else "#FB8C00",
         edgecolor="none", zorder=3))
 
-    # ---- card 2: algorithm configuration (whatever keys the run used) ----
     cfg = sol["config"]
     algo = ALGO_DISPLAY.get(sol["algorithm"], sol["algorithm"].upper())
     y = panel.card(f"{algo} CONFIG", max(len(cfg), 1))
@@ -349,7 +294,6 @@ def draw_panel(ax, sol, coverage_pct):
     else:
         y = panel.kv(y, "config", "n/a")
 
-    # ---- card 3: legend (2 columns x 3 rows) ----
     legend_items = [
         (THEME["covered_1"], "covered"),
         (THEME["covered_2"], "covered ×2"),
@@ -372,7 +316,6 @@ def draw_panel(ax, sol, coverage_pct):
                 fontsize=7.3, color=THEME["ink"], va="bottom", zorder=2)
 
 
-# --- Entry point ---
 
 def main():
     parser = argparse.ArgumentParser(
@@ -417,7 +360,6 @@ def main():
     nrows, ncols = len(grid), len(grid[0])
     algo = ALGO_DISPLAY.get(sol["algorithm"], sol["algorithm"].upper())
 
-    # --- figure layout: [ map | panel ] with a thin progress bar under map ---
     map_w   = max(4.6, ncols * 0.42)
     panel_w = 2.7
     fig_w   = map_w + panel_w + 0.8
@@ -434,7 +376,6 @@ def main():
     ax_bar   = fig.add_subplot(gs[1, 0])
     ax_panel = fig.add_subplot(gs[:, 1])
 
-    # --- header ---
     display = base.removeprefix("cpp_")
     size, layout = display.split("_", 1)
     fig.text(0.06, 0.955, f"{algo} Coverage Path", fontsize=15,

@@ -1,4 +1,3 @@
-// shared.rs — types, grid, decoder, and fitness. can be used by all algorithm files.
 
 //use rand::Rng;
 use std::collections::HashSet;
@@ -7,7 +6,6 @@ use std::fs;
 use std::io::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-// ── Core types ────────────────────────────────────────────────
 
 pub const START: Position = (0, 0);
 pub const INSTANCE: &str = "instances/cpp_10x10_chunk.txt";
@@ -15,9 +13,6 @@ pub const INSTANCE: &str = "instances/cpp_10x10_chunk.txt";
 pub type Grid = Vec<Vec<u8>>; // 0 = free, 1 = obstacle
 pub type Position = (usize, usize); // (row, col)
 
-/// The move alphabet. Copy so we can pass by value freely.
-/// All 8 moves are single-step: 4 cardinal + 4 diagonal.
-/// If the destination cell is blocked or out of bounds the robot stays put.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Move {
     Up,
@@ -30,8 +25,7 @@ pub enum Move {
     DownRight,
 }
 
-/// ALL_MOVES index contract (shared by pheromone arrays and NeighbourMap):
-///   0=Up  1=Down  2=Left  3=Right  4=UpLeft  5=UpRight  6=DownLeft  7=DownRight
+/// 0=Up  1=Down  2=Left  3=Right  4=UpLeft  5=UpRight  6=DownLeft  7=DownRight
 pub const ALL_MOVES: [Move; 8] = [
     Move::Up,
     Move::Down,
@@ -62,9 +56,8 @@ impl fmt::Display for Move {
     }
 }
 
-//  Per-iteration log ─────────────────────────────────────────
 
-// Best solution of each iteration , used for CSV export
+// Best solution of each iteration for CSV export
 pub struct IterationLog {
     pub iteration: usize,
     pub fitness: f64,
@@ -74,12 +67,10 @@ pub struct IterationLog {
     pub moves: Vec<Move>,
 }
 
-// ── Result ────────────────────────────────────────────────────
-
 pub struct Result {
     pub best_moves: Vec<Move>,
     pub best_fitness: Fitness,
-    pub history: Vec<IterationLog>, // one entry per iteration
+    pub history: Vec<IterationLog>, 
 }
 
 /// Turns an array of moves into a single string.
@@ -91,9 +82,7 @@ pub fn fmt_moves(moves: &[Move]) -> String {
         .join(" ")
 }
 
-// ── Grid ──────────────────────────────────────────────────────
 
-/// Reads grid from file to Grid (Vec<Vec<u8>>)
 pub fn parse_grid(path: &str) -> Grid {
     fs::read_to_string(path)
         .unwrap()
@@ -104,7 +93,6 @@ pub fn parse_grid(path: &str) -> Grid {
         .collect()
 }
 
-/// Counts how many cells are not obstacles (the target to cover)
 pub fn free_cells(grid: &Grid) -> usize {
     grid.iter()
         .flat_map(|r| r.iter())
@@ -112,14 +100,12 @@ pub fn free_cells(grid: &Grid) -> usize {
         .count()
 }
 
-/// Returns true if a cell is within bounds and not an obstacle
 pub fn is_free(r: isize, c: isize, grid: &Grid) -> bool {
-    r >= 0 && r < grid.len() as isize //check if row is correct
-        && c >= 0 && c < grid[0].len() as isize // check if column is correct
-        && grid[r as usize][c as usize] == 0 // check if cell is without obstacle
+    r >= 0 && r < grid.len() as isize 
+        && c >= 0 && c < grid[0].len() as isize 
+        && grid[r as usize][c as usize] == 0 
 }
 
-/// Prints the grid to console. \
 /// S=start  E=end  *=visited  .=missed  #=obstacle
 pub fn display_grid(grid: &Grid, path: &[Position]) {
     let visited: HashSet<Position> = path.iter().cloned().collect();
@@ -137,9 +123,7 @@ pub fn display_grid(grid: &Grid, path: &[Position]) {
     }
 }
 
-// ── Decoder ───────────────────────────────────────────────────
 
-/// Translates a Move into a (row_delta, col_delta) single step.
 /// All 8 moves are one cell; diagonal moves step ±1 on both axes.
 pub fn dir_delta(mv: Move) -> (isize, isize) {
     match mv {
@@ -154,9 +138,6 @@ pub fn dir_delta(mv: Move) -> (isize, isize) {
     }
 }
 
-/// Takes current position, attempts to execute a Move, and returns an array of covered cells.
-/// All moves are single-step. Returns a one-element Vec if the destination is free,
-/// or an empty Vec if it is blocked or out of bounds.
 pub fn apply_move(pos: Position, mv: Move, grid: &Grid) -> Vec<Position> {
     let (r, c) = (pos.0 as isize, pos.1 as isize);
     let (dr, dc) = dir_delta(mv);
@@ -167,7 +148,6 @@ pub fn apply_move(pos: Position, mv: Move, grid: &Grid) -> Vec<Position> {
     }
 }
 
-/// Generates path from a list of moves, starting from START (0, 0).
 pub fn decode(moves: &[Move], grid: &Grid) -> Vec<Position> {
     let mut path = vec![START];
     let mut pos = START;
@@ -181,7 +161,6 @@ pub fn decode(moves: &[Move], grid: &Grid) -> Vec<Position> {
     path
 }
 
-// ── Fitness ───────────────────────────────────────────────────
 
 pub struct Fitness {
     pub total: f64,
@@ -191,7 +170,7 @@ pub struct Fitness {
 }
 
 ///Returns revisit and unvisited penalty value. \
-/// Penalties scale with grid area so the algorithm always prefers full coverage
+/// Penalties scale with grid area
 /// area=25  : revisit=50,   unvisited=125
 /// area=100 : revisit=200,  unvisited=500
 /// area=400 : revisit=800,  unvisited=2000
@@ -207,7 +186,7 @@ fn euclidean(a: Position, b: Position) -> f64 {
     (dr * dr + dc * dc).sqrt()
 }
 
-/// Evaluates path fitness.
+/// Evaluates path fitness
 pub fn evaluate(path: &[Position], grid: &Grid) -> Fitness {
     let distance: f64 = path.windows(2).map(|w| euclidean(w[0], w[1])).sum();
     let mut seen = HashSet::new();
@@ -228,10 +207,7 @@ pub fn evaluate(path: &[Position], grid: &Grid) -> Fitness {
     }
 }
 
-// ── Utility ───────────────────────────────────────────────────
 
-/// Extracts the filename without extension from a path
-/// "instances/cpp_10x10_line.txt" → "cpp_10x10_line"
 pub fn instance_stem(path: &str) -> String {
     path.split('/')
         .last()
@@ -240,7 +216,6 @@ pub fn instance_stem(path: &str) -> String {
         .to_string()
 }
 
-/// Generates a unique tag based on the instance name and current time
 pub fn generate_run_tag(instance_path: &str) -> String {
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -249,7 +224,6 @@ pub fn generate_run_tag(instance_path: &str) -> String {
     format!("{}_{}", instance_stem(instance_path), ts)
 }
 
-/// Ensures the results directory exists
 pub fn ensure_results_dir() {
     fs::create_dir_all("results").expect("could not create results/");
 }
@@ -276,7 +250,6 @@ pub fn save_csv(result: &Result, tag: &str, alg: &str) {
     println!("\nsaved csv   → {}", path);
 }
 
-// Best solution path as (row,col) pairs , in json,  for future grid visualisation
 pub fn save_json(result: &Result, grid: &Grid, tag: &str, alg: &str, config_json: &str) {
     ensure_results_dir();
     let path = format!("results/{}_{}.json", tag, alg);

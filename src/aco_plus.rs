@@ -16,7 +16,7 @@ pub struct AcoConfig {
     pub rho:       f64,   // global evaporation rate (0–1)
     pub local_rho: f64,   // ACS local update strength ξ — pulls used edges toward τ₀
     pub q0:        f64,   // exploitation probability (ACS-style)
-    pub tabu_size: usize, // short-term memory — blocks last N visited cells
+    pub tabu_size: usize, // tabu is not used in the project. excluded.
 
 
     pub restart_after: usize,
@@ -33,7 +33,7 @@ impl AcoConfig {
             rho:             0.05,
             local_rho:       0.1,
             q0:              0.9,
-            tabu_size:       6,
+            tabu_size:       0,
             restart_after:   250,
         }
     }

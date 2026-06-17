@@ -17,3 +17,8 @@ path = "src/main_ils.rs"
 [[bin]]
 name = "aco_plus"
 path = "src/main_aco_plus.rs"
+
+
+[[bin]]
+name = "ils_gridsearch"
+path = "src/main_ils_gridsearch.rs"

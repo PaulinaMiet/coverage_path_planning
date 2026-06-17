@@ -18,13 +18,13 @@ fn main() {
         uw
     );
 
-    // 1. Run Algorithm
+    // run algorithm
     let cfg = IlsConfig::default_for();
     //let mut cfg = IlsConfig::default_for();
     //cfg.strategy = ils::StartingStrategy::Random;
     let result = ils::ils_run(&grid, &cfg, &mut rng);
 
-    // 2. Print Convergence (Progress)
+    // print progress
     println!("--- Convergence ---");
     let mut last = f64::MAX;
     for log in &result.history {
@@ -34,7 +34,7 @@ fn main() {
         }
     }
 
-    // 3. Print Final Summary
+    // print summary
     let f = &result.best_fitness;
     println!("\n--- Results ---");
     println!("best fitness : {:.2}", f.total);
@@ -45,7 +45,7 @@ fn main() {
     println!("\n--- Visualisation ---");
     display_grid(&grid, &decode(&result.best_moves, &grid));
 
-    // 4. Save Outputs
+    // save outputs
     let run_tag = generate_run_tag(INSTANCE);
     save_csv(&result, &run_tag, alg);
     save_json(&result, &grid, &run_tag, alg, &cfg.to_json_map());

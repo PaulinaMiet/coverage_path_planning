@@ -4,7 +4,7 @@ use crate::shared::*;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
-// Config ─────────────────────────────────────────────────────
+// ── Config ──
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StartingStrategy {
@@ -37,7 +37,7 @@ impl IlsConfig {
     }
 }
 
-// ── Minimal Spanning Tree ──────────────────────────────────────
+// ── Minimal Spanning Tree ──
 
 #[derive(Debug, Clone)]
 pub struct Edge {
@@ -45,13 +45,13 @@ pub struct Edge {
     pub v: Position,
 }
 
-/// Computes an MST of all free cells using Prim's algorithm.
+/// Computes MST of free cells using Prim's algorithm.
 pub fn compute_mst(grid: &Grid) -> Vec<Edge> {
     let mut mst = Vec::new();
     let mut visited = HashSet::new();
     let mut pq = BinaryHeap::new();
 
-    // Find the first free cell to start from (ideally START if it's free)
+    // Find the first free cell to start from (START if it's free)
     let start_node = if is_free(START.0 as isize, START.1 as isize, grid) {
         Some(START)
     } else {
@@ -144,7 +144,7 @@ pub fn compute_random_solution(grid: &Grid, rng: &mut impl Rng) -> Vec<Move> {
         .collect()
 }
 
-// ── Main ILS loop ──────────────────────────────────────────────
+// ── Main ILS loop ──
 
 pub fn ils_run(grid: &Grid, cfg: &IlsConfig, rng: &mut impl Rng) -> Result {
     let mut current_moves = match cfg.strategy {
@@ -250,7 +250,7 @@ fn local_search(moves: &mut Vec<Move>, grid: &Grid, imp: usize, rng: &mut impl R
     }
     let mut current_fitness = evaluate(&decode(moves, grid), grid).total;
 
-    // try n random improvements
+    // Try n random improvements
     for _ in 0..imp {
         let idx = rng.gen_range(0..moves.len());
         let old_move = moves[idx];

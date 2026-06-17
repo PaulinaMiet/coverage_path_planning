@@ -1,12 +1,10 @@
 // shared.rs — types, grid, decoder, and fitness. can be used by all algorithm files.
 
-//use rand::Rng;
 use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 use std::io::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
-
 
 pub const START: Position = (0, 0);
 pub const INSTANCE: &str = "instances/cpp_20x20_sparse.txt";
@@ -61,8 +59,7 @@ impl fmt::Display for Move {
     }
 }
 
-
-// Best solution of each iteration , used for CSV export
+/// Best solution of each iteration for CSV export
 pub struct IterationLog {
     pub iteration: usize,
     pub fitness: f64,
@@ -71,7 +68,6 @@ pub struct IterationLog {
     pub unvisited: usize,
     pub moves: Vec<Move>,
 }
-
 
 pub struct Result {
     pub best_moves: Vec<Move>,
@@ -87,7 +83,6 @@ pub fn fmt_moves(moves: &[Move]) -> String {
         .collect::<Vec<_>>()
         .join(" ")
 }
-
 
 /// Reads grid from file to Grid (Vec<Vec<u8>>)
 pub fn parse_grid(path: &str) -> Grid {
@@ -133,9 +128,8 @@ pub fn display_grid(grid: &Grid, path: &[Position]) {
     }
 }
 
-
-/// Translates a Move into a (row_delta, col_delta) single step.
-/// All 8 moves are one cell; diagonal moves step ±1 on both axes.
+/// Translates a Move into a (row_delta, col_delta) step.
+/// Diagonal moves step ±1 on both axes.
 pub fn dir_delta(mv: Move) -> (isize, isize) {
     match mv {
         Move::Up => (-1, 0),
@@ -150,7 +144,7 @@ pub fn dir_delta(mv: Move) -> (isize, isize) {
 }
 
 /// Takes current position, attempts to execute a Move, and returns an array of covered cells.
-/// All moves are single-step. Returns a one-element Vec if the destination is free,
+/// Returns a one-element Vec if the destination is free,
 /// or an empty Vec if it is blocked or out of bounds.
 pub fn apply_move(pos: Position, mv: Move, grid: &Grid) -> Vec<Position> {
     let (r, c) = (pos.0 as isize, pos.1 as isize);
@@ -175,7 +169,6 @@ pub fn decode(moves: &[Move], grid: &Grid) -> Vec<Position> {
     }
     path
 }
-
 
 pub struct Fitness {
     pub total: f64,
@@ -222,7 +215,6 @@ pub fn evaluate(path: &[Position], grid: &Grid) -> Fitness {
     }
 }
 
-
 /// Extracts the filename without extension from a path
 /// "instances/cpp_10x10_line.txt" → "cpp_10x10_line"
 pub fn instance_stem(path: &str) -> String {
@@ -247,6 +239,8 @@ pub fn ensure_results_dir() {
     fs::create_dir_all("results").expect("could not create results/");
 }
 
+/// Saves csv with iteration, fitness, distance, revisits, unvisited, solution
+/// to results dir
 pub fn save_csv(result: &Result, tag: &str, alg: &str) {
     ensure_results_dir();
     let path = format!("results/{}_{}.csv", tag, alg);
@@ -269,7 +263,7 @@ pub fn save_csv(result: &Result, tag: &str, alg: &str) {
     println!("\nsaved csv   → {}", path);
 }
 
-// Best solution path as (row,col) pairs , in json,  for future grid visualisation
+// Best solution path as (row,col) pairs in json for grid visualisation
 pub fn save_json(result: &Result, grid: &Grid, tag: &str, alg: &str, config_json: &str) {
     ensure_results_dir();
     let path = format!("results/{}_{}.json", tag, alg);
